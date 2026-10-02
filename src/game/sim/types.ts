@@ -1,83 +1,104 @@
-import type { GameConfig, IslandConfig } from "../config";
+import type { GameConfig, Vec2 } from "../config";
 
-export type EntityId = number;
+export type { Vec2 };
 
-export interface Vector2 {
-  x: number;
-  y: number;
+export type ShipKind = "player" | "chaser" | "shooter";
+export type ProjectileOwner = "player" | "enemy";
+export type EndReason = "time" | "death";
+export type GameStatus = "running" | "ended";
+
+export interface Cooldowns {
+  front: number; // seconds remaining
+  left: number;
+  right: number;
+}
+
+export interface Ship {
+  id: number;
+  kind: ShipKind;
+  pos: Vec2;
+  angle: number; // radians, 0 = +x
+  hp: number;
+  maxHp: number;
+  radius: number;
+  cooldowns: Cooldowns;
+}
+
+export interface Projectile {
+  id: number;
+  owner: ProjectileOwner;
+  pos: Vec2;
+  vel: Vec2;
+  damage: number;
+  ttl: number; // seconds remaining
+  radius: number;
+}
+
+export interface Island {
+  pos: Vec2;
+  radius: number;
 }
 
 export interface InputState {
-  readonly moveForward: boolean;
-  readonly rotateLeft: boolean;
-  readonly rotateRight: boolean;
-  readonly fireFront: boolean;
-  readonly fireBroadsideLeft: boolean;
-  readonly fireBroadsideRight: boolean;
+  forward: boolean;
+  turnLeft: boolean;
+  turnRight: boolean;
+  fireFront: boolean;
+  fireLeft: boolean;
+  fireRight: boolean;
 }
 
-export type MatchStatus = "ready" | "playing" | "paused" | "finished";
+export const EMPTY_INPUT: Readonly<InputState> = {
+  forward: false,
+  turnLeft: false,
+  turnRight: false,
+  fireFront: false,
+  fireLeft: false,
+  fireRight: false,
+};
 
-export type MatchEndReason = "time-expired" | "player-destroyed";
+/** One-shot facts for render/sound. Cleared by the consumer each frame. */
+export type GameEvent =
+  | { type: "shot"; pos: Vec2; angle: number; owner: ProjectileOwner }
+  | { type: "hit"; pos: Vec2; target: "player" | "enemy" | "island" }
+  | { type: "explosion"; pos: Vec2; kind: ShipKind };
 
-export type EnemyKind = "chaser" | "shooter";
-
-export type ProjectileOwner = "player" | "enemy";
-
-export type WeaponKind = "player-front" | "player-broadside" | "enemy-shooter";
-
-export interface ShipState {
-  id: EntityId;
-  position: Vector2;
-  rotationRadians: number;
-  radius: number;
-  health: number;
-  maximumHealth: number;
+export interface GameStats {
+  shotsFired: number;
+  enemiesSpawned: number;
+  enemiesDestroyed: number;
+  damageTaken: number;
 }
-
-export interface PlayerState extends ShipState {
-  frontWeaponCooldownSeconds: number;
-  broadsideWeaponCooldownSeconds: number;
-}
-
-export interface ChaserState extends ShipState {
-  kind: "chaser";
-}
-
-export interface ShooterState extends ShipState {
-  kind: "shooter";
-  weaponCooldownSeconds: number;
-}
-
-export type EnemyState = ChaserState | ShooterState;
-
-export interface ProjectileState {
-  id: EntityId;
-  owner: ProjectileOwner;
-  weapon: WeaponKind;
-  position: Vector2;
-  velocity: Vector2;
-  rotationRadians: number;
-  radius: number;
-  damage: number;
-  remainingLifetimeSeconds: number;
-  remainingRange: number;
-}
-
-export type IslandState = IslandConfig;
 
 export interface GameState {
-  status: MatchStatus;
-  endReason: MatchEndReason | null;
-  elapsedSeconds: number;
-  remainingSeconds: number;
+  readonly seed: number;
+  readonly config: GameConfig; // match snapshot
+  status: GameStatus;
+  endReason?: EndReason;
+
+  elapsedSec: number; // active play time
+  timeLeftSec: number;
   score: number;
+
+  player: Ship;
+  enemies: Ship[];
+  projectiles: Projectile[];
+  islands: readonly Island[];
+
+  spawnTimerSec: number;
+  nextId: number;
   rngState: number;
-  nextEntityId: EntityId;
-  spawnCooldownSeconds: number;
-  configSnapshot: GameConfig;
-  player: PlayerState;
-  enemies: EnemyState[];
-  projectiles: ProjectileState[];
-  islands: IslandState[];
+
+  events: GameEvent[];
+  stats: GameStats;
+}
+
+/** What the HUD and the semantic UI need (small, copied at ~10 Hz). */
+export interface HudSnapshot {
+  score: number;
+  timeLeftSec: number;
+  hp: number;
+  maxHp: number;
+  status: GameStatus;
+  endReason?: EndReason;
 }

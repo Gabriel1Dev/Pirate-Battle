@@ -1,167 +1,182 @@
-export interface ProjectileConfig {
-  readonly speed: number;
-  readonly damage: number;
-  readonly radius: number;
-  readonly lifetimeSeconds: number;
-  readonly range: number;
+export interface Vec2 {
+  x: number;
+  y: number;
 }
 
-export interface WeaponConfig extends ProjectileConfig {
-  readonly cooldownSeconds: number;
-  readonly projectileCount: number;
-  readonly parallelSpacing: number;
+export interface WeaponConfig {
+  cooldownSec: number;
+  damage: number;
+  projectileSpeed: number; // px/s
+  projectileLifetimeSec: number;
+  projectileRadius: number;
+}
+
+export interface BroadsideConfig extends WeaponConfig {
+  projectileCount: number; // parallel projectiles per side
+  spacing: number; // px between parallel projectiles
+}
+
+export interface ShipConfig {
+  maxHp: number;
+  speed: number; // px/s
+  turnSpeed: number; // rad/s
+  radius: number;
 }
 
 export interface IslandConfig {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+  x: number;
+  y: number;
+  radius: number;
 }
 
 export interface GameConfig {
-  readonly simulation: {
-    readonly fixedTimeStepSeconds: number;
-    readonly maxFrameDeltaSeconds: number;
-    readonly maxSubStepsPerFrame: number;
-    readonly hudUpdateIntervalSeconds: number;
+  step: { fixedStepSec: number; maxFrameSec: number };
+  match: { durationSec: number; spawnIntervalSec: number };
+  arena: {
+    width: number;
+    height: number;
+    playerStart: Vec2;
+    playerStartAngle: number; // radians, 0 = facing +x (right)
+    islands: readonly IslandConfig[];
   };
-  readonly match: {
-    readonly durationSeconds: number;
+  player: ShipConfig & {
+    front: WeaponConfig;
+    broadside: BroadsideConfig;
   };
-  readonly arena: {
-    readonly width: number;
-    readonly height: number;
-    readonly boundaryMargin: number;
-    readonly islands: readonly IslandConfig[];
+  chaser: ShipConfig & { contactDamage: number };
+  shooter: ShipConfig & {
+    attackRange: number; // fires when player is within this distance
+    keepDistance: number; // stops approaching at this distance
+    weapon: WeaponConfig;
   };
-  readonly player: {
-    readonly health: number;
-    readonly radius: number;
-    readonly movementSpeed: number;
-    readonly rotationSpeedRadiansPerSecond: number;
-    readonly frontWeapon: WeaponConfig;
-    readonly broadsideWeapon: WeaponConfig;
+  spawn: {
+    minDistanceFromPlayer: number;
+    edgeMargin: number;
+    maxAttempts: number;
+    weights: { chaser: number; shooter: number };
   };
-  readonly enemies: {
-    readonly chaser: {
-      readonly health: number;
-      readonly radius: number;
-      readonly movementSpeed: number;
-      readonly rotationSpeedRadiansPerSecond: number;
-      readonly collisionDamage: number;
-    };
-    readonly shooter: {
-      readonly health: number;
-      readonly radius: number;
-      readonly movementSpeed: number;
-      readonly rotationSpeedRadiansPerSecond: number;
-      readonly attackRange: number;
-      readonly weapon: WeaponConfig;
-    };
-    readonly spawn: {
-      readonly intervalSeconds: number;
-      readonly minimumDistanceFromPlayer: number;
-      readonly edgeMargin: number;
-      readonly maximumPlacementAttempts: number;
-      readonly chaserWeight: number;
-      readonly shooterWeight: number;
-    };
+  visual: {
+    damageStages: readonly number[]; // hp ratios where the ship sprite degrades
   };
 }
 
-export const LIMITS = {
-  matchDurationSeconds: {
-    min: 60,
-    max: 180,
-  },
-  enemySpawnIntervalSeconds: {
-    min: 1,
-    max: 30,
-  },
-} as const;
-
-export const DEFAULT_GAME_CONFIG: GameConfig = {
-  simulation: {
-    fixedTimeStepSeconds: 1 / 60,
-    maxFrameDeltaSeconds: 0.25,
-    maxSubStepsPerFrame: 8,
-    hudUpdateIntervalSeconds: 0.1,
-  },
-  match: {
-    durationSeconds: 120,
-  },
+export const DEFAULT_CONFIG: GameConfig = {
+  step: { fixedStepSec: 1 / 60, maxFrameSec: 0.25 },
+  match: { durationSec: 90, spawnIntervalSec: 3 },
   arena: {
-    width: 1600,
-    height: 900,
-    boundaryMargin: 24,
+    width: 1280,
+    height: 720,
+    playerStart: { x: 160, y: 360 },
+    playerStartAngle: 0,
     islands: [
-      { x: 650, y: 350, width: 220, height: 160 },
-      { x: 1120, y: 610, width: 180, height: 130 },
+      { x: 420, y: 360, radius: 70 },
+      { x: 880, y: 210, radius: 60 },
+      { x: 900, y: 530, radius: 80 },
     ],
   },
   player: {
-    health: 100,
-    radius: 24,
-    movementSpeed: 240,
-    rotationSpeedRadiansPerSecond: 3,
-    frontWeapon: {
-      cooldownSeconds: 0.35,
-      projectileCount: 1,
-      parallelSpacing: 0,
-      speed: 520,
-      damage: 20,
-      radius: 5,
-      lifetimeSeconds: 1.5,
-      range: 780,
+    maxHp: 100,
+    speed: 180,
+    turnSpeed: 2.5,
+    radius: 22,
+    front: {
+      cooldownSec: 0.4,
+      damage: 10,
+      projectileSpeed: 420,
+      projectileLifetimeSec: 1.5,
+      projectileRadius: 5,
     },
-    broadsideWeapon: {
-      cooldownSeconds: 1.2,
+    broadside: {
+      cooldownSec: 1.2,
+      damage: 8,
+      projectileSpeed: 380,
+      projectileLifetimeSec: 1.2,
+      projectileRadius: 5,
       projectileCount: 3,
-      parallelSpacing: 18,
-      speed: 460,
-      damage: 15,
-      radius: 5,
-      lifetimeSeconds: 1.5,
-      range: 690,
+      spacing: 14,
     },
   },
-  enemies: {
-    chaser: {
-      health: 40,
-      radius: 22,
-      movementSpeed: 150,
-      rotationSpeedRadiansPerSecond: 2.4,
-      collisionDamage: 25,
-    },
-    shooter: {
-      health: 50,
-      radius: 24,
-      movementSpeed: 110,
-      rotationSpeedRadiansPerSecond: 1.8,
-      attackRange: 420,
-      weapon: {
-        cooldownSeconds: 1.4,
-        projectileCount: 1,
-        parallelSpacing: 0,
-        speed: 330,
-        damage: 12,
-        radius: 5,
-        lifetimeSeconds: 2,
-        range: 660,
-      },
-    },
-    spawn: {
-      intervalSeconds: 5,
-      minimumDistanceFromPlayer: 360,
-      edgeMargin: 48,
-      maximumPlacementAttempts: 24,
-      chaserWeight: 0.6,
-      shooterWeight: 0.4,
+  chaser: {
+    maxHp: 20,
+    speed: 120,
+    turnSpeed: 2,
+    radius: 20,
+    contactDamage: 25,
+  },
+  shooter: {
+    maxHp: 30,
+    speed: 90,
+    turnSpeed: 1.8,
+    radius: 22,
+    attackRange: 350,
+    keepDistance: 250,
+    weapon: {
+      cooldownSec: 1.8,
+      damage: 8,
+      projectileSpeed: 300,
+      projectileLifetimeSec: 1.6,
+      projectileRadius: 5,
     },
   },
+  spawn: {
+    minDistanceFromPlayer: 300,
+    edgeMargin: 40,
+    maxAttempts: 20,
+    weights: { chaser: 0.5, shooter: 0.5 },
+  },
+  visual: { damageStages: [0.66, 0.33] },
 };
 
-export const createGameConfigSnapshot = (
-  config: GameConfig = DEFAULT_GAME_CONFIG,
-): GameConfig => structuredClone(config);
+/** Limits for the Options screen (documented in README). */
+export const LIMITS = {
+  durationSec: { min: 60, max: 180 },
+  spawnIntervalSec: { min: 1, max: 10 },
+} as const;
+
+/** The two values the player can change in Options. */
+export interface MatchOptions {
+  durationSec: number;
+  spawnIntervalSec: number;
+}
+
+export const DEFAULT_OPTIONS: MatchOptions = {
+  durationSec: DEFAULT_CONFIG.match.durationSec,
+  spawnIntervalSec: DEFAULT_CONFIG.match.spawnIntervalSec,
+};
+
+export type OptionsErrors = Partial<Record<keyof MatchOptions, string>>;
+
+export function validateOptions(options: MatchOptions): OptionsErrors {
+  const errors: OptionsErrors = {};
+  const { durationSec: d, spawnIntervalSec: s } = LIMITS;
+
+  if (
+    !Number.isFinite(options.durationSec) ||
+    options.durationSec < d.min ||
+    options.durationSec > d.max
+  ) {
+    errors.durationSec = `Game session time must be between ${d.min} and ${d.max} seconds.`;
+  }
+  if (
+    !Number.isFinite(options.spawnIntervalSec) ||
+    options.spawnIntervalSec < s.min ||
+    options.spawnIntervalSec > s.max
+  ) {
+    errors.spawnIntervalSec = `Enemy spawn time must be between ${s.min} and ${s.max} seconds.`;
+  }
+  return errors;
+}
+
+/**
+ * Builds the config snapshot used by ONE match.
+ * Deep copy: later changes to options never affect a running match.
+ */
+export function createMatchConfig(
+  options: MatchOptions,
+  base: GameConfig = DEFAULT_CONFIG,
+): GameConfig {
+  const snapshot = structuredClone(base);
+  snapshot.match.durationSec = options.durationSec;
+  snapshot.match.spawnIntervalSec = options.spawnIntervalSec;
+  return snapshot;
+}
