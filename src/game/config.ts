@@ -32,6 +32,7 @@ export interface IslandConfig {
 export interface GameConfig {
   step: { fixedStepSec: number; maxFrameSec: number };
   match: { durationSec: number; spawnIntervalSec: number };
+  scoring: { pointsPerEnemy: number };
   arena: {
     width: number;
     height: number;
@@ -63,6 +64,7 @@ export interface GameConfig {
 export const DEFAULT_CONFIG: GameConfig = {
   step: { fixedStepSec: 1 / 60, maxFrameSec: 0.25 },
   match: { durationSec: 90, spawnIntervalSec: 3 },
+  scoring: { pointsPerEnemy: 1 },
   arena: {
     width: 1280,
     height: 720,

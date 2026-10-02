@@ -1,0 +1,368 @@
+.menu-screen,
+.game-screen {
+  min-height: 100vh;
+  padding: 28px clamp(16px, 4vw, 56px);
+}
+
+.menu-screen {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 72% 36%, rgb(30 104 112 / 22%), transparent 35%),
+    radial-gradient(ellipse at 26% 82%, rgb(31 85 99 / 22%), transparent 34%),
+    #081b25;
+}
+
+.menu-card {
+  width: min(100%, 560px);
+  padding: clamp(28px, 6vw, 56px);
+  border: 1px solid rgb(230 214 176 / 22%);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgb(18 47 58 / 96%), rgb(10 31 40 / 96%));
+  box-shadow: 0 28px 90px rgb(0 0 0 / 35%);
+}
+
+.game-kicker {
+  color: #e5bd69;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.menu-card h1,
+.game-brand h1 {
+  margin: 8px 0;
+  color: #fbf3df;
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: -0.035em;
+}
+
+.menu-card h1 {
+  font-size: clamp(2.7rem, 9vw, 4.6rem);
+  line-height: 0.98;
+}
+
+.menu-card > p {
+  margin: 18px 0 28px;
+  color: #b5c8c7;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.menu-controls {
+  margin: 24px 0 0 !important;
+  color: #8fa8a9 !important;
+  font-size: 0.82rem !important;
+}
+
+.primary-button,
+.secondary-button,
+.text-button {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 10px 18px;
+  color: #f9f4e8;
+  cursor: pointer;
+  font-weight: 750;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
+}
+
+.primary-button {
+  background: #b94f35;
+  box-shadow: 0 8px 24px rgb(185 79 53 / 25%);
+}
+
+.primary-button:hover {
+  transform: translateY(-1px);
+  background: #d16040;
+}
+
+.secondary-button {
+  border-color: rgb(202 220 211 / 20%);
+  background: #183d49;
+}
+
+.secondary-button:hover,
+.text-button:hover {
+  background: #245362;
+}
+
+.text-button {
+  border-color: transparent;
+  background: transparent;
+  color: #c3d1cb;
+}
+
+.game-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: min(100%, 1600px);
+  min-height: 100dvh;
+  margin: 0 auto;
+}
+
+.game-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: min(100%, 1280px);
+  margin: 0 auto;
+}
+
+.game-brand h1 {
+  font-size: clamp(1.45rem, 3vw, 2rem);
+}
+
+.game-brand .game-kicker {
+  font-size: 0.64rem;
+}
+
+.game-hud {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.hud-stat {
+  display: grid;
+  min-width: 82px;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid rgb(204 219 202 / 12%);
+  border-radius: 10px;
+  background: rgb(17 48 57 / 82%);
+}
+
+.hud-stat > span:first-child {
+  color: #95ada9;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hud-stat strong {
+  color: #f4d27f;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-health {
+  min-width: 132px;
+}
+
+.hud-health-track {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #3c4540;
+}
+
+.hud-health-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #79d58e;
+  transition: width 100ms linear;
+}
+
+.game-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arena-frame {
+  position: relative;
+  width: min(100%, calc((100dvh - 220px) * 16 / 9));
+  max-height: calc(100dvh - 200px);
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid rgb(213 211 176 / 36%);
+  border-radius: 14px;
+  background: #15536b;
+  box-shadow: 0 22px 60px rgb(0 0 0 / 36%);
+}
+
+.arena-host {
+  width: 100%;
+  height: 100%;
+}
+
+.arena-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.arena-loading,
+.arena-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(6 21 28 / 72%);
+}
+
+.arena-loading {
+  color: #f0d792;
+  font-size: 0.9rem;
+  font-weight: 750;
+  pointer-events: none;
+}
+
+.overlay-card {
+  width: min(90%, 380px);
+  padding: 28px;
+  border: 1px solid rgb(234 216 173 / 24%);
+  border-radius: 15px;
+  background: #102e39;
+  text-align: center;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 30%);
+}
+
+.overlay-card h2 {
+  margin: 10px 0;
+  color: #fff5dc;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.8rem;
+}
+
+.overlay-card p {
+  color: #bfd0c9;
+  line-height: 1.5;
+}
+
+.game-footer {
+  display: flex;
+  justify-content: center;
+  width: min(100%, 1280px);
+  margin: 0 auto;
+}
+
+.keyboard-hint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  color: #a2b6b2;
+  font-size: 0.78rem;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 23px;
+  margin-left: 3px;
+  border: 1px solid #42616a;
+  border-radius: 4px;
+  padding: 2px 5px;
+  background: #173743;
+  color: #f3db9f;
+  font: inherit;
+  text-align: center;
+}
+
+.touch-controls {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .game-screen {
+    gap: 12px;
+    padding: 14px 12px 18px;
+  }
+
+  .game-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .game-brand {
+    flex: 1;
+  }
+
+  .game-hud {
+    order: 3;
+    width: 100%;
+  }
+
+  .hud-stat {
+    flex: 1;
+  }
+
+  .game-toolbar-actions {
+    gap: 4px;
+  }
+
+  .game-toolbar-actions button {
+    min-height: 38px;
+    padding: 7px 10px;
+    font-size: 0.82rem;
+  }
+
+  .arena-frame {
+    width: 100%;
+    max-height: none;
+    flex: 1;
+    min-height: 220px;
+  }
+
+  .keyboard-hint {
+    display: none;
+  }
+
+  .game-footer {
+    flex-direction: column;
+  }
+
+  .touch-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .touch-control {
+    min-height: 43px;
+    border: 1px solid #355b63;
+    border-radius: 8px;
+    background: #163b47;
+    color: #e9dfc2;
+    font-size: 0.75rem;
+    font-weight: 700;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .touch-fireFront,
+  .touch-fireLeft,
+  .touch-fireRight {
+    border-color: #80533e;
+    background: #543b34;
+  }
+}
+
+@media (max-width: 420px) {
+  .menu-controls {
+    font-size: 0.72rem !important;
+  }
+
+  .game-brand h1 {
+    font-size: 1.25rem;
+  }
+
+  .hud-stat {
+    min-width: 0;
+    padding: 7px 8px;
+  }
+}

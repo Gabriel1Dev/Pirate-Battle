@@ -5,7 +5,7 @@ export type { Vec2 };
 export type ShipKind = "player" | "chaser" | "shooter";
 export type ProjectileOwner = "player" | "enemy";
 export type EndReason = "time" | "death";
-export type GameStatus = "running" | "ended";
+export type GameStatus = "running" | "paused" | "ended";
 
 export interface Cooldowns {
   front: number; // seconds remaining

@@ -208,3 +208,61 @@ O `README.md` da solução deve incluir setup, variáveis de ambiente, controles
 Documente em `ARCHITECTURE.md` a integração React/PixiJS, o ciclo da simulação, colisões, gerenciamento de recursos, persistência local e integração do ranking e histórico, incluindo contratos, cache e recuperação de registros pendentes. Registre limitações e decisões de balanceamento.
 
 Inclua os relatórios de testes e profiling. A solução deve executar a partir de um checkout limpo, sem depender de serviços privados.
+
+---
+
+## Current build: setup and controls
+
+The Portuguese sections above describe the full challenge requirements. The
+following section documents the current implementation; features not listed as
+implemented here are still pending.
+
+### Requirements
+
+- Node.js 20.19+ or 22.12+
+- npm
+
+### Run locally
+
+```sh
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite to play. Available validation commands:
+
+```sh
+npm run build
+npx tsc -b --pretty false
+npm run lint
+npm run preview
+```
+
+`npm run build` performs the TypeScript project build before creating the Vite
+production bundle. A Playwright test script has not been added yet.
+
+### Implemented gameplay
+
+- Start, play, pause, resume, restart, and return to the main menu.
+- Move forward and turn with **W/Up**, **A**, and **D**.
+- Fire the front cannon with **Space** and left/right broadsides with **Q/E**.
+- On touch screens, use the six on-screen buttons for the same actions.
+- Sink enemies for points, avoid Chaser collisions and Shooter projectiles, and
+  survive until the match timer expires.
+
+The current build includes the seeded simulation, fixed-step clock, enemy
+spawning and combat, circular island obstacles, PixiJS rendering, ship health
+bars, and a throttled HUD. Game tuning is in `src/game/config.ts`. Options
+persistence, ranking/history APIs, MSW scenarios, automated Playwright tests,
+and deployment are not implemented yet.
+
+In development, `window.__game` can read a copied simulation state, set the
+current input, advance a deterministic amount of simulation time, reset with a
+seed, or switch back to the real-time clock. This hook is omitted from
+production builds.
+
+## Project architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the simulation/rendering boundary,
+fixed-step lifecycle, input handling, pause behavior, current limitations, and
+the planned integration boundaries for features not implemented yet.

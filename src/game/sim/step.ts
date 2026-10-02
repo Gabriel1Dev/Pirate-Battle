@@ -2,6 +2,8 @@ import type { GameEvent, GameState, InputState } from "./types";
 import { movePlayer } from "./movement";
 import { updateProjectiles } from "./projectiles";
 import { updatePlayerWeapons } from "./weapons";
+import { resolveShipCollisions } from "./collisions";
+import { updateEnemies, updateEnemySpawning } from "./enemies";
 
 export function stepGame(
   currentState: GameState,
@@ -26,9 +28,12 @@ export function stepGame(
 
   movePlayer(state, input, deltaSeconds);
   updatePlayerWeapons(state, input, deltaSeconds);
+  updateEnemies(state, deltaSeconds);
+  updateEnemySpawning(state, deltaSeconds);
   updateProjectiles(state, deltaSeconds);
+  resolveShipCollisions(state);
 
-  if (state.timeLeftSec === 0) {
+  if (state.status === "running" && state.timeLeftSec === 0) {
     state.status = "ended";
     state.endReason = "time";
   }

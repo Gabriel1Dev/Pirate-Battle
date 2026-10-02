@@ -1,6 +1,8 @@
 :root {
   color-scheme: dark;
-  font-family: system-ui, sans-serif;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -16,6 +18,17 @@ body,
 }
 
 body {
-  background: #101820;
-  color: #fff;
+  min-width: 0;
+  overflow-x: hidden;
+  background: #081b25;
+  color: #f4f1e8;
+}
+
+button {
+  font: inherit;
+}
+
+button:focus-visible {
+  outline: 3px solid #f0c36a;
+  outline-offset: 3px;
 }
