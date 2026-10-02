@@ -78,6 +78,7 @@ export interface GameState {
 
   elapsedSec: number; // active play time
   timeLeftSec: number;
+  accumulatorSec: number;
   score: number;
 
   player: Ship;
