@@ -64,21 +64,30 @@ teardown, and the application is destroyed with its display objects. The
 development test hook is removed at the same lifecycle boundary.
 
 The renderer scales and centers the logical arena within the available canvas.
-At present, islands are drawn as simple circles and projectiles as colored
-circles; supplied ship sprites are loaded locally. Water tile textures,
-effects, richer health-bar assets, and progress reporting are still pending.
+It tiles the supplied ocean texture across the arena and builds each island
+from masked sand and grass textures with local foliage and rock details. The
+shore masks use the configured island radii, preserving the simulation's
+circular collision footprint. Supplied ship sprites and player/enemy health-bar
+frame and fill sprites are loaded locally; projectiles remain colored circles.
+The React HUD and touch/action buttons use the supplied health, round-button,
+and icon assets while remaining semantic, accessible controls. Additional
+combat effects and progress reporting are still pending.
 
 ## Configuration and current scope
 
 Gameplay tuning belongs in `src/game/config.ts`; simulation systems read those
 values from the per-match deep-copied config. The renderer uses config only for
-arena dimensions and visual thresholds. Options UI and local options
-persistence have not been implemented.
+arena dimensions and visual thresholds. `OptionsScreen` validates the match
+duration and spawn interval against the limits in the config module. The
+versioned options record is stored in localStorage by `src/store/optionsStorage.ts`;
+invalid or unavailable storage is surfaced in the UI instead of being treated
+as a successful save. Starting a match snapshots the saved options into a
+`GameConfig`, and later changes cannot affect that running match.
 
-The current implementation does not yet include the complete menu/options and
-result flows, local result persistence, ranking/history contracts and queries,
-Axios integration, MSW handlers/scenarios, automated Playwright tests, or
-deployment. Those are outstanding challenge requirements, not behaviors to
-assume from the current build. When added, keep API failures isolated from
-gameplay and persist completed-match submissions as pending before network
-requests so retries can be idempotent.
+The current implementation does not yet include result flows, local result
+persistence, ranking/history contracts and queries, Axios integration, MSW
+handlers/scenarios, automated Playwright tests, or deployment. Those are
+outstanding challenge requirements, not behaviors to assume from the current
+build. When added, keep API failures isolated from gameplay and persist
+completed-match submissions as pending before network requests so retries can
+be idempotent.

@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { DEFAULT_CONFIG } from "../game/config";
-import { createKeyboardInput, type KeyboardInput } from "../game/input/keyboard";
-import { initializePixiRenderer, type GameRenderer } from "../game/render/pixiRenderer";
+import type { GameConfig } from "../game/config";
+import {
+  createKeyboardInput,
+  type KeyboardInput,
+} from "../game/input/keyboard";
+import {
+  initializePixiRenderer,
+  type GameRenderer,
+} from "../game/render/pixiRenderer";
 import { advanceGame } from "../game/sim/step";
 import { createInitialGameState } from "../game/sim/world";
 import { pauseGame, resumeGame } from "../game/sim/pause";
@@ -12,6 +18,8 @@ import {
   type InputState,
 } from "../game/sim/types";
 import { useGameStore } from "../store/gameStore";
+import type { MatchOptions } from "../game/config";
+import { OptionsScreen } from "./OptionsScreen";
 
 interface GameTestHook {
   getState(): GameState | null;
@@ -29,23 +37,57 @@ declare global {
 
 interface GameScreenProps {
   readonly seed: number;
+  readonly config: GameConfig;
+  readonly options: MatchOptions;
   readonly onExit: () => void;
   readonly onRestart: () => void;
+  readonly onSaveOptions: (options: MatchOptions) => void;
 }
 
 interface TouchControl {
   readonly action: keyof InputState;
   readonly label: string;
+  readonly icon: string;
 }
 
 const TOUCH_CONTROLS: readonly TouchControl[] = [
-  { action: "turnLeft", label: "Turn left" },
-  { action: "forward", label: "Move forward" },
-  { action: "turnRight", label: "Turn right" },
-  { action: "fireLeft", label: "Fire left broadside" },
-  { action: "fireFront", label: "Fire front" },
-  { action: "fireRight", label: "Fire right broadside" },
+  {
+    action: "turnLeft",
+    label: "Turn left",
+    icon: "/assets/png/default/ui/controls/icon_turn_left.png",
+  },
+  {
+    action: "forward",
+    label: "Move forward",
+    icon: "/assets/png/default/ui/controls/icon_forward.png",
+  },
+  {
+    action: "turnRight",
+    label: "Turn right",
+    icon: "/assets/png/default/ui/controls/icon_turn_right.png",
+  },
+  {
+    action: "fireLeft",
+    label: "Fire left broadside",
+    icon: "/assets/png/default/ui/controls/icon_fire_left.png",
+  },
+  {
+    action: "fireFront",
+    label: "Fire front",
+    icon: "/assets/png/default/ui/controls/icon_fire_front.png",
+  },
+  {
+    action: "fireRight",
+    label: "Fire right broadside",
+    icon: "/assets/png/default/ui/controls/icon_fire_right.png",
+  },
 ];
+
+const HEALTH_FILL_PATHS = {
+  green: "/assets/png/default/ui/hud/health_fill_green.png",
+  amber: "/assets/png/default/ui/hud/health_fill_amber.png",
+  red: "/assets/png/default/ui/hud/health_fill_red.png",
+} as const;
 
 function createHudSnapshot(state: GameState): HudSnapshot {
   return {
@@ -66,8 +108,11 @@ function formatTime(seconds: number): string {
 
 export function GameScreen({
   seed,
+  config,
+  options,
   onExit,
   onRestart,
+  onSaveOptions,
 }: GameScreenProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const gameStateRef = useRef<GameState | null>(null);
@@ -79,6 +124,8 @@ export function GameScreen({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsSaveError, setOptionsSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -89,7 +136,7 @@ export function GameScreen({
     let cancelled = false;
     let manualClock = false;
     let hudElapsedSeconds = 0;
-    const initialState = createInitialGameState(seed, DEFAULT_CONFIG);
+    const initialState = createInitialGameState(seed, config);
     gameStateRef.current = initialState;
     setHud(createHudSnapshot(initialState));
     setLoadError(null);
@@ -144,7 +191,7 @@ export function GameScreen({
         setHud(createHudSnapshot(state));
       },
       reset: (nextSeed) => {
-        const state = createInitialGameState(nextSeed, DEFAULT_CONFIG);
+        const state = createInitialGameState(nextSeed, config);
         manualClock = true;
         gameStateRef.current = state;
         Object.assign(inputStateRef.current, EMPTY_INPUT);
@@ -223,10 +270,7 @@ export function GameScreen({
         delete window.__game;
       }
       window.removeEventListener("blur", handlePause);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange,
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       inputRef.current?.destroy();
       inputRef.current = null;
       rendererRef.current?.destroy();
@@ -234,13 +278,13 @@ export function GameScreen({
       gameStateRef.current = null;
       setHud({
         score: 0,
-        timeLeftSec: DEFAULT_CONFIG.match.durationSec,
-        hp: DEFAULT_CONFIG.player.maxHp,
-        maxHp: DEFAULT_CONFIG.player.maxHp,
+        timeLeftSec: config.match.durationSec,
+        hp: config.player.maxHp,
+        maxHp: config.player.maxHp,
         status: "ended",
       });
     };
-  }, [loadAttempt, seed, setHud]);
+  }, [config, loadAttempt, seed, setHud]);
 
   const togglePause = useCallback((): void => {
     const state = gameStateRef.current;
@@ -264,36 +308,80 @@ export function GameScreen({
 
   const isPaused = hud?.status === "paused";
   const isFinished = hud?.status === "ended";
+  const elapsedSeconds = Math.max(
+    0,
+    config.match.durationSec - (hud?.timeLeftSec ?? config.match.durationSec),
+  );
+  const healthRatio = hud?.maxHp
+    ? Math.max(0, Math.min(1, hud.hp / hud.maxHp))
+    : 0;
+  const [firstDamageStage, secondDamageStage] =
+    config.visual.damageStages;
+  const healthFillPath =
+    healthRatio <= secondDamageStage
+      ? HEALTH_FILL_PATHS.red
+      : healthRatio <= firstDamageStage
+        ? HEALTH_FILL_PATHS.amber
+        : HEALTH_FILL_PATHS.green;
+  const saveOptionsFromPause = (nextOptions: MatchOptions): void => {
+    try {
+      onSaveOptions(nextOptions);
+      setOptionsSaveError(null);
+      setOptionsOpen(false);
+    } catch (error: unknown) {
+      setOptionsSaveError(
+        error instanceof Error
+          ? `Options could not be saved: ${error.message}`
+          : "Options could not be saved in this browser.",
+      );
+    }
+  };
 
   return (
     <main className="game-screen">
       <header className="game-toolbar">
         <div className="game-brand">
-          <span className="game-kicker">Open waters</span>
+          <span className="game-kicker">Good Luck</span>
           <h1>Pirate Battle</h1>
         </div>
         <div className="game-hud" aria-label="Current match status">
-          <div className="hud-stat">
-            <span>Score</span>
+          <div className="hud-stat hud-score">
+            <span className="hud-stat-icon" aria-hidden="true">
+              <img src="/assets/png/default/ui/hud/icon_score.png" alt="" />
+            </span>
+            <span className="sr-only">Score</span>
             <strong>{hud?.score ?? 0}</strong>
           </div>
-          <div className="hud-stat">
-            <span>Time</span>
+          <div className="hud-stat hud-time">
+            <span className="hud-stat-icon" aria-hidden="true">
+              <img src="/assets/png/default/ui/hud/icon_time.png" alt="" />
+            </span>
+            <span className="sr-only">Time</span>
             <strong>{formatTime(hud?.timeLeftSec ?? 0)}</strong>
           </div>
           <div
             className="hud-stat hud-health"
             aria-label={`Ship health ${hud?.hp ?? 0} of ${hud?.maxHp ?? 0}`}
           >
-            <span>Hull</span>
+            <span className="hud-health-icon" aria-hidden="true">
+              <img src="/assets/png/default/ui/hud/icon_heart.png" alt="" />
+            </span>
             <strong>
               {hud?.hp ?? 0}/{hud?.maxHp ?? 0}
             </strong>
-            <span className="hud-health-track">
-              <span
+            <span className="hud-health-meter" aria-hidden="true">
+              <img
+                className="hud-health-frame"
+                src="/assets/png/default/ui/hud/health_frame.png"
+                alt=""
+              />
+              <img
+                className="hud-health-fill"
+                src={healthFillPath}
                 style={{
-                  width: `${hud?.maxHp ? ((hud.hp / hud.maxHp) * 100).toFixed(1) : 0}%`,
+                  clipPath: `inset(0 ${(1 - healthRatio) * 100}% 0 0)`,
                 }}
+                alt=""
               />
             </span>
           </div>
@@ -301,15 +389,26 @@ export function GameScreen({
         <div className="game-toolbar-actions">
           {!isFinished && (
             <button
-              className="secondary-button"
+              aria-label={isPaused ? "Resume battle" : "Pause battle"}
+              className="asset-icon-button"
               onClick={togglePause}
+              title={isPaused ? "Resume battle" : "Pause battle"}
               type="button"
             >
-              {isPaused ? "Resume" : "Pause"}
+              <img
+                src={`/assets/png/default/ui/controls/icon_${isPaused ? "play" : "pause"}.png`}
+                alt=""
+              />
             </button>
           )}
-          <button className="text-button" onClick={onExit} type="button">
-            Main menu
+          <button
+            aria-label="Main menu"
+            className="asset-icon-button"
+            onClick={onExit}
+            title="Main menu"
+            type="button"
+          >
+            <img src="/assets/png/default/ui/controls/icon_home.png" alt="" />
           </button>
         </div>
       </header>
@@ -319,14 +418,15 @@ export function GameScreen({
         {loadError && (
           <div className="arena-overlay" role="alert">
             <div className="overlay-card">
+              <span className="game-kicker">Crew report</span>
               <h2>Unable to load the battle</h2>
               <p>{loadError}</p>
               <button
-                className="primary-button"
+                className="primary-button menu-button"
                 onClick={() => setLoadAttempt((attempt) => attempt + 1)}
                 type="button"
               >
-                Retry loading
+                RETRY LOADING
               </button>
             </div>
           </div>
@@ -336,37 +436,73 @@ export function GameScreen({
             Loading battle assets…
           </div>
         )}
-        {(isPaused || isFinished) && (
-          <div className="arena-overlay" role="status">
+        {(isPaused || isFinished) && !optionsOpen && (
+          <div
+            aria-labelledby="match-overlay-title"
+            aria-modal="true"
+            className="arena-overlay"
+            role="dialog"
+          >
             <div className="overlay-card">
               <span className="game-kicker">
-                {isFinished ? "Voyage complete" : "Battle paused"}
+                {isFinished ? "Battle complete" : "Ready when you are"}
               </span>
-              <h2>
+              <h2 id="match-overlay-title">
                 {isFinished
-                  ? hud?.endReason === "death"
-                    ? "Your ship has fallen"
-                    : "Time is up"
-                  : "Take a breath, Captain"}
+                  ? "VOYAGE COMPLETE"
+                  : "PAUSED"}
               </h2>
-              {isFinished && <p>Final score: {hud?.score ?? 0}</p>}
-              {!isFinished && (
-                <button
-                  className="primary-button"
-                  onClick={togglePause}
-                  type="button"
-                >
-                  Resume battle
-                </button>
-              )}
-              {isFinished && (
-                <button
-                  className="primary-button"
-                  onClick={onRestart}
-                  type="button"
-                >
-                  Play again
-                </button>
+              {isFinished ? (
+                <>
+                  <strong className="result-score">{hud?.score ?? 0}</strong>
+                  <p className="result-summary">
+                    {hud?.score ?? 0} POINTS · {formatTime(elapsedSeconds)} ·{" "}
+                    {hud?.endReason === "death" ? "DEFEATED" : "TIME UP"}
+                  </p>
+                  <div className="overlay-actions">
+                    <button
+                      className="primary-button menu-button"
+                      onClick={onRestart}
+                      type="button"
+                    >
+                      PLAY AGAIN
+                    </button>
+                    <button
+                      className="primary-button menu-button"
+                      onClick={onExit}
+                      type="button"
+                    >
+                      MAIN MENU
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="overlay-actions">
+                  <button
+                    className="primary-button menu-button"
+                    onClick={togglePause}
+                    type="button"
+                  >
+                    RESUME
+                  </button>
+                  <button
+                    className="primary-button menu-button"
+                    onClick={() => {
+                      setOptionsSaveError(null);
+                      setOptionsOpen(true);
+                    }}
+                    type="button"
+                  >
+                    OPTIONS
+                  </button>
+                  <button
+                    className="primary-button menu-button"
+                    onClick={onExit}
+                    type="button"
+                  >
+                    MAIN MENU
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -376,31 +512,56 @@ export function GameScreen({
       <footer className="game-footer">
         <p className="keyboard-hint">
           Move <kbd>W</kbd>/<kbd>↑</kbd>
-          <span>Turn <kbd>A</kbd>/<kbd>D</kbd></span>
-          <span>Front <kbd>Space</kbd></span>
-          <span>Broadsides <kbd>Q</kbd>/<kbd>E</kbd></span>
+          <span>
+            Turn <kbd>A</kbd>/<kbd>D</kbd>
+          </span>
+          <span>
+            Front <kbd>Space</kbd>
+          </span>
+          <span>
+            Broadsides <kbd>Q</kbd>/<kbd>E</kbd>
+          </span>
         </p>
         <div className="touch-controls" aria-label="Touch controls">
-          {TOUCH_CONTROLS.map(({ action, label }) => (
-            <button
-              aria-label={label}
-              className={`touch-control touch-${action}`}
-              key={action}
-              onPointerCancel={() => setTouchAction(action, false)}
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.currentTarget.setPointerCapture(event.pointerId);
-                setTouchAction(action, true);
-              }}
-              onPointerLeave={() => setTouchAction(action, false)}
-              onPointerUp={() => setTouchAction(action, false)}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
+          {[TOUCH_CONTROLS.slice(0, 3), TOUCH_CONTROLS.slice(3)].map(
+            (group, index) => (
+              <div
+                className={`touch-control-group touch-control-group-${index + 1}`}
+                key={index}
+              >
+                {group.map(({ action, icon, label }) => (
+                  <button
+                    aria-label={label}
+                    className={`touch-control touch-${action}`}
+                    key={action}
+                    onPointerCancel={() => setTouchAction(action, false)}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      setTouchAction(action, true);
+                    }}
+                    onPointerLeave={() => setTouchAction(action, false)}
+                    onPointerUp={() => setTouchAction(action, false)}
+                    type="button"
+                  >
+                    <img src={icon} alt="" />
+                    <span className="sr-only">{label}</span>
+                  </button>
+                ))}
+              </div>
+            ),
+          )}
         </div>
       </footer>
+      {optionsOpen && (
+        <OptionsScreen
+          initialOptions={options}
+          onCancel={() => setOptionsOpen(false)}
+          onSave={saveOptionsFromPause}
+          persistenceError={optionsSaveError}
+          presentation="dialog"
+        />
+      )}
     </main>
   );
 }

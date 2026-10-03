@@ -252,9 +252,14 @@ production bundle. A Playwright test script has not been added yet.
 
 The current build includes the seeded simulation, fixed-step clock, enemy
 spawning and combat, circular island obstacles, PixiJS rendering, ship health
-bars, and a throttled HUD. Game tuning is in `src/game/config.ts`. Options
-persistence, ranking/history APIs, MSW scenarios, automated Playwright tests,
-and deployment are not implemented yet.
+bars, a throttled HUD, and a persisted Options screen. Use **Options** from the
+main menu to set the game session time (60–180 whole seconds) and enemy spawn
+time (1–10 whole seconds). Saved options are restored after refresh and copied
+into a configuration snapshot when a new match starts; changes affect future
+matches only. Defaults are 90 seconds per match and 3 seconds between spawns.
+Game tuning and limits are defined in `src/game/config.ts`. Ranking/history
+APIs, MSW scenarios, automated Playwright tests, and deployment are not
+implemented yet.
 
 In development, `window.__game` can read a copied simulation state, set the
 current input, advance a deterministic amount of simulation time, reset with a

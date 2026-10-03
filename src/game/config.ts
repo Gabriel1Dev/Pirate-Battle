@@ -153,18 +153,18 @@ export function validateOptions(options: MatchOptions): OptionsErrors {
   const { durationSec: d, spawnIntervalSec: s } = LIMITS;
 
   if (
-    !Number.isFinite(options.durationSec) ||
+    !Number.isInteger(options.durationSec) ||
     options.durationSec < d.min ||
     options.durationSec > d.max
   ) {
-    errors.durationSec = `Game session time must be between ${d.min} and ${d.max} seconds.`;
+    errors.durationSec = `Game session time must be a whole number between ${d.min} and ${d.max} seconds.`;
   }
   if (
-    !Number.isFinite(options.spawnIntervalSec) ||
+    !Number.isInteger(options.spawnIntervalSec) ||
     options.spawnIntervalSec < s.min ||
     options.spawnIntervalSec > s.max
   ) {
-    errors.spawnIntervalSec = `Enemy spawn time must be between ${s.min} and ${s.max} seconds.`;
+    errors.spawnIntervalSec = `Enemy spawn time must be a whole number between ${s.min} and ${s.max} seconds.`;
   }
   return errors;
 }
