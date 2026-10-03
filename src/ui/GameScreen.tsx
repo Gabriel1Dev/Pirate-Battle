@@ -19,6 +19,7 @@ import {
 } from "../game/sim/types";
 import { useGameStore } from "../store/gameStore";
 import type { MatchOptions } from "../game/config";
+import type { MatchResultDraft } from "../store/matchStorage";
 import { OptionsScreen } from "./OptionsScreen";
 
 interface GameTestHook {
@@ -37,8 +38,10 @@ declare global {
 
 interface GameScreenProps {
   readonly seed: number;
+  readonly matchId: string;
   readonly config: GameConfig;
   readonly options: MatchOptions;
+  readonly onMatchFinished: (result: MatchResultDraft) => void;
   readonly onExit: () => void;
   readonly onRestart: () => void;
   readonly onSaveOptions: (options: MatchOptions) => void;
@@ -108,8 +111,10 @@ function formatTime(seconds: number): string {
 
 export function GameScreen({
   seed,
+  matchId,
   config,
   options,
+  onMatchFinished,
   onExit,
   onRestart,
   onSaveOptions,
@@ -127,6 +132,8 @@ export function GameScreen({
   const [assetProgress, setAssetProgress] = useState(0);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [optionsSaveError, setOptionsSaveError] = useState<string | null>(null);
+  const [matchSaveError, setMatchSaveError] = useState<string | null>(null);
+  const [matchSaved, setMatchSaved] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -137,12 +144,45 @@ export function GameScreen({
     let cancelled = false;
     let manualClock = false;
     let hudElapsedSeconds = 0;
+    let matchWasPersisted = false;
     const initialState = createInitialGameState(seed, config);
     gameStateRef.current = initialState;
     setHud(createHudSnapshot(initialState));
     setLoadError(null);
     setLoaded(false);
     setAssetProgress(0);
+    setMatchSaveError(null);
+    setMatchSaved(false);
+
+    const persistFinishedMatch = (state: GameState): void => {
+      if (
+        matchWasPersisted ||
+        state.status !== "ended" ||
+        state.endReason === undefined
+      ) {
+        return;
+      }
+
+      matchWasPersisted = true;
+      try {
+        onMatchFinished({
+          matchId,
+          completedAt: new Date().toISOString(),
+          score: state.score,
+          durationSec: state.elapsedSec,
+          endReason: state.endReason,
+          config: state.config,
+        });
+        setMatchSaved(true);
+        setMatchSaveError(null);
+      } catch (error: unknown) {
+        setMatchSaveError(
+          error instanceof Error
+            ? `The result could not be saved on this device: ${error.message}`
+            : "The result could not be saved on this device.",
+        );
+      }
+    };
 
     const handlePause = (): void => {
       const state = gameStateRef.current;
@@ -189,6 +229,7 @@ export function GameScreen({
         }
 
         gameStateRef.current = state;
+        persistFinishedMatch(state);
         rendererRef.current?.draw(state);
         setHud(createHudSnapshot(state));
       },
@@ -243,6 +284,7 @@ export function GameScreen({
               ticker.deltaMS / 1000,
             );
             gameStateRef.current = nextState;
+            persistFinishedMatch(nextState);
             hudDirty ||= nextState.status !== currentState.status;
           }
 
@@ -290,7 +332,7 @@ export function GameScreen({
         status: "ended",
       });
     };
-  }, [config, loadAttempt, seed, setHud]);
+  }, [config, loadAttempt, matchId, onMatchFinished, seed, setHud]);
 
   const togglePause = useCallback((): void => {
     const state = gameStateRef.current;
@@ -472,6 +514,17 @@ export function GameScreen({
                     {hud?.score ?? 0} POINTS · {formatTime(elapsedSeconds)} ·{" "}
                     {hud?.endReason === "death" ? "DEFEATED" : "TIME UP"}
                   </p>
+                  {matchSaveError ? (
+                    <p className="options-error" role="alert">
+                      {matchSaveError}
+                    </p>
+                  ) : (
+                    matchSaved && (
+                      <p className="pending-match-status" role="status">
+                        Saved on this device.
+                      </p>
+                    )
+                  )}
                   <div className="overlay-actions">
                     <button
                       className="primary-button menu-button"

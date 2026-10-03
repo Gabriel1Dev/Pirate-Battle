@@ -88,10 +88,31 @@ invalid or unavailable storage is surfaced in the UI instead of being treated
 as a successful save. Starting a match snapshots the saved options into a
 `GameConfig`, and later changes cannot affect that running match.
 
-The current implementation does not yet include result flows, local result
-persistence, ranking/history contracts and queries, Axios integration, MSW
-handlers/scenarios, automated Playwright tests, or deployment. Those are
-outstanding challenge requirements, not behaviors to assume from the current
-build. When added, keep API failures isolated from gameplay and persist
-completed-match submissions as pending before network requests so retries can
-be idempotent.
+Each new match receives a client-generated `matchId`. On completion by time or
+player death, `GameScreen` creates a result from the final simulation state and
+passes it to `src/store/matchStorage.ts`. That module stores a versioned record
+containing the local `playerId`, completion timestamp, score, active duration,
+end reason, and full match-config snapshot. It is written with
+`submissionStatus: "pending"` before network submission. Axios and TanStack
+Query submit the record with its match ID as an idempotency key; successful
+responses mark it `confirmed` locally, while failures retain it for an
+automatic retry after refresh or a manual menu retry. Abandoned matches are
+not recorded. API and storage errors are surfaced without preventing gameplay.
+
+`src/api/contracts.ts` defines the shared record and pagination contracts.
+`src/api/matches.ts` contains the Axios requests; `src/api/queries.ts` owns
+query keys, caching, retries, and ranking/history invalidation after submission.
+Ranking is filtered by the full serialized match config and ordered by score
+descending, duration ascending, date ascending, then match ID. History is
+scoped to the local player ID. The menu shows both queries with pagination,
+loading, empty, error, retry, and background-refresh states.
+
+`src/mocks/handlers.ts` provides the same ranking, history, and idempotent
+submission endpoints in development and production. Mock submissions persist
+in localStorage. The menu's network selector configures reproducible success,
+empty, paginated, latency, timeout, HTTP error, endpoint failure,
+timeout-after-save, and offline-on-finish scenarios; it is also controlled by
+the `scenario` query parameter. Reset clears the scenario and mock server
+records, but intentionally retains the player's local pending queue.
+
+Automated Playwright tests and deployment remain outstanding.

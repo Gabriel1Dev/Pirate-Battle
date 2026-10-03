@@ -252,14 +252,33 @@ production bundle. A Playwright test script has not been added yet.
 
 The current build includes the seeded simulation, fixed-step clock, enemy
 spawning and combat, circular island obstacles, PixiJS rendering, ship health
-bars, a throttled HUD, and a persisted Options screen. Use **Options** from the
-main menu to set the game session time (60–180 whole seconds) and enemy spawn
-time (1–10 whole seconds). Saved options are restored after refresh and copied
-into a configuration snapshot when a new match starts; changes affect future
-matches only. Defaults are 90 seconds per match and 3 seconds between spawns.
-Game tuning and limits are defined in `src/game/config.ts`. Ranking/history
-APIs, MSW scenarios, automated Playwright tests, and deployment are not
-implemented yet.
+bars, combat effects, a throttled HUD, and a persisted Options screen. Use
+**Options** from the main menu to set the game session time (60–180 whole
+seconds) and enemy spawn time (1–10 whole seconds). Saved options are restored
+after refresh and copied into a configuration snapshot when a new match starts;
+changes affect future matches only. Defaults are 90 seconds per match and 3
+seconds between spawns. Game tuning and limits are defined in
+`src/game/config.ts`.
+
+Each match receives a client-generated ID. On time or player death, its score,
+active duration, end reason, completion time, and full config snapshot are
+saved to localStorage as a pending submission before upload. Axios submits the
+record through TanStack Query to the MSW-backed API, which upserts by match ID;
+confirmed records are marked locally and pending records are retried after
+refresh or with the menu retry action. API errors never block gameplay.
+
+Use **Ranking** and **Match History** from the main menu to browse paginated
+API results. Ranking entries are filtered to the exact current match config and
+ordered by score descending, duration ascending, completion date ascending,
+then match ID. Fixture players populate the ranking. The **Network demo**
+selector in the menu exposes success, empty, pagination, latency, timeout,
+HTTP error, per-endpoint failure, timeout-after-save, and offline-on-finish
+scenarios. Selecting a scenario also updates the `scenario` query parameter;
+**Reset mock data** restores the success scenario and clears mock-server data.
+The mocks run in development and production and persist accepted mock matches
+locally in the browser.
+
+Automated Playwright tests and deployment are not implemented yet.
 
 In development, `window.__game` can read a copied simulation state, set the
 current input, advance a deterministic amount of simulation time, reset with a
