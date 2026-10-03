@@ -115,4 +115,17 @@ timeout-after-save, and offline-on-finish scenarios; it is also controlled by
 the `scenario` query parameter. Reset clears the scenario and mock server
 records, but intentionally retains the player's local pending queue.
 
-Automated Playwright tests and deployment remain outstanding.
+`playwright.config.ts` runs browser tests in Chromium desktop and mobile
+profiles. `e2e/game.spec.ts` covers options persistence, seeded movement and
+combat/spawn behavior, island and arena-boundary blocking, match end on player
+death, manual and focus-loss pause, clean restart, mobile touch controls,
+pending upload recovery, timeout-after-save idempotency, and ranking pagination
+plus empty/failure scenarios. `e2e/visual.spec.ts` compares the menu, paused
+arena, and completed result against versioned screenshots in
+`e2e/__screenshots__/`. The normal `npm run test:e2e` command compares
+baselines; update them intentionally with `npm run test:e2e:update`. Playwright
+stores HTML reports and failure traces under ignored output directories.
+The production build and preview are validated, including MSW startup and match
+submission through the ranking and history APIs. `vercel.json` configures Vercel
+to build with `npm run build` and serve `dist`; the public deployment URL and
+remaining challenge checklist scenarios are still outstanding.

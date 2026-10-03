@@ -24,7 +24,7 @@ import { OptionsScreen } from "./OptionsScreen";
 
 interface GameTestHook {
   getState(): GameState | null;
-  setInput(input: InputState): void;
+  setInput(input: Partial<InputState>): void;
   advanceBy(seconds: number): void;
   reset(seed: number): void;
   useRealtimeClock(): void;
@@ -206,7 +206,7 @@ export function GameScreen({
         return state ? structuredClone(state) : null;
       },
       setInput: (input) => {
-        Object.assign(inputStateRef.current, input);
+        Object.assign(inputStateRef.current, EMPTY_INPUT, input);
       },
       advanceBy: (seconds) => {
         if (!Number.isFinite(seconds) || seconds < 0) {
@@ -246,7 +246,7 @@ export function GameScreen({
         manualClock = false;
       },
     };
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || import.meta.env.MODE === "performance") {
       window.__game = testHook;
     }
 
@@ -414,9 +414,6 @@ export function GameScreen({
             <span className="hud-health-icon" aria-hidden="true">
               <img src="/assets/png/default/ui/hud/icon_heart.png" alt="" />
             </span>
-            <strong>
-              {hud?.hp ?? 0}/{hud?.maxHp ?? 0}
-            </strong>
             <span className="hud-health-meter" aria-hidden="true">
               <img
                 className="hud-health-frame"
@@ -431,6 +428,9 @@ export function GameScreen({
                 }}
                 alt=""
               />
+              <strong className="hud-health-value">
+                {hud?.hp ?? 0}/{hud?.maxHp ?? 0}
+              </strong>
             </span>
           </div>
         </div>
@@ -576,47 +576,51 @@ export function GameScreen({
       </section>
 
       <footer className="game-footer">
-        <p className="keyboard-hint">
-          Move <kbd>W</kbd>/<kbd>↑</kbd>
-          <span>
-            Turn <kbd>A</kbd>/<kbd>D</kbd>
-          </span>
-          <span>
-            Front <kbd>Space</kbd>
-          </span>
-          <span>
-            Broadsides <kbd>Q</kbd>/<kbd>E</kbd>
-          </span>
-        </p>
-        <div className="touch-controls" aria-label="Touch controls">
-          {[TOUCH_CONTROLS.slice(0, 3), TOUCH_CONTROLS.slice(3)].map(
-            (group, index) => (
-              <div
-                className={`touch-control-group touch-control-group-${index + 1}`}
-                key={index}
-              >
-                {group.map(({ action, icon, label }) => (
-                  <button
-                    aria-label={label}
-                    className={`touch-control touch-${action}`}
-                    key={action}
-                    onPointerCancel={() => setTouchAction(action, false)}
-                    onPointerDown={(event) => {
-                      event.preventDefault();
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      setTouchAction(action, true);
-                    }}
-                    onPointerLeave={() => setTouchAction(action, false)}
-                    onPointerUp={() => setTouchAction(action, false)}
-                    type="button"
-                  >
-                    <img src={icon} alt="" />
-                    <span className="sr-only">{label}</span>
-                  </button>
-                ))}
-              </div>
-            ),
-          )}
+        <div className="menu-card game-controls-panel">
+          <p className="keyboard-hint">
+            <span>
+              Move <kbd>W</kbd>/<kbd>↑</kbd>
+            </span>
+            <span>
+              Turn <kbd>A</kbd>/<kbd>D</kbd>
+            </span>
+            <span>
+              Front <kbd>Space</kbd>
+            </span>
+            <span>
+              Broadsides <kbd>Q</kbd>/<kbd>E</kbd>
+            </span>
+          </p>
+          <div className="touch-controls" aria-label="Touch controls">
+            {[TOUCH_CONTROLS.slice(0, 3), TOUCH_CONTROLS.slice(3)].map(
+              (group, index) => (
+                <div
+                  className={`touch-control-group touch-control-group-${index + 1}`}
+                  key={index}
+                >
+                  {group.map(({ action, icon, label }) => (
+                    <button
+                      aria-label={label}
+                      className={`touch-control touch-${action}`}
+                      key={action}
+                      onPointerCancel={() => setTouchAction(action, false)}
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        setTouchAction(action, true);
+                      }}
+                      onPointerLeave={() => setTouchAction(action, false)}
+                      onPointerUp={() => setTouchAction(action, false)}
+                      type="button"
+                    >
+                      <img src={icon} alt="" />
+                      <span className="sr-only">{label}</span>
+                    </button>
+                  ))}
+                </div>
+              ),
+            )}
+          </div>
         </div>
       </footer>
       {optionsOpen && (
