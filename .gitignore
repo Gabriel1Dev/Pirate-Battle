@@ -6,6 +6,10 @@ node_modules/
 
 # Build output
 dist/
+playwright-report/
+playwright-profile-report/
+test-results/
+performance-results/
 
 # Environment
 .env

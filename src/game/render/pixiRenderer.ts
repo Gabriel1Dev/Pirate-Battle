@@ -440,7 +440,7 @@ export async function initializePixiRenderer(
 
   const draw = (state: GameState, deltaSeconds = 0): void => {
     const screen = application.renderer.screen;
-    const scale = Math.min(
+    const scale = Math.max(
       screen.width / config.arena.width,
       screen.height / config.arena.height,
     );
