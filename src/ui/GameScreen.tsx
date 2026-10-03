@@ -124,6 +124,7 @@ export function GameScreen({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [assetProgress, setAssetProgress] = useState(0);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [optionsSaveError, setOptionsSaveError] = useState<string | null>(null);
 
@@ -141,6 +142,7 @@ export function GameScreen({
     setHud(createHudSnapshot(initialState));
     setLoadError(null);
     setLoaded(false);
+    setAssetProgress(0);
 
     const handlePause = (): void => {
       const state = gameStateRef.current;
@@ -210,7 +212,11 @@ export function GameScreen({
     window.addEventListener("blur", handlePause);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    void initializePixiRenderer(host, initialState.config)
+    void initializePixiRenderer(host, initialState.config, (progress) => {
+      if (!cancelled) {
+        setAssetProgress(progress);
+      }
+    })
       .then((renderer) => {
         if (cancelled) {
           renderer.destroy();
@@ -245,7 +251,7 @@ export function GameScreen({
             return;
           }
 
-          renderer.draw(nextState);
+          renderer.draw(nextState, ticker.deltaMS / 1000);
           hudElapsedSeconds += ticker.deltaMS / 1000;
           if (hudElapsedSeconds >= 0.1 || hudDirty) {
             setHud(createHudSnapshot(nextState));
@@ -433,7 +439,14 @@ export function GameScreen({
         )}
         {!loadError && !loaded && (
           <div className="arena-loading" aria-live="polite">
-            Loading battle assets…
+            <div className="arena-loading-card">
+              <span>Loading battle assets… {Math.round(assetProgress * 100)}%</span>
+              <progress
+                aria-label="Battle asset loading progress"
+                max={1}
+                value={assetProgress}
+              />
+            </div>
           </div>
         )}
         {(isPaused || isFinished) && !optionsOpen && (

@@ -8,7 +8,7 @@ import {
   type Texture,
 } from "pixi.js";
 import type { GameConfig, IslandConfig } from "../config";
-import type { GameState, Ship } from "../sim/types";
+import type { GameEvent, GameState, Ship } from "../sim/types";
 
 const SHIP_TEXTURE_PATHS = {
   player: "/assets/png/default/ships/ship_1.png",
@@ -35,6 +35,25 @@ const TILE_TEXTURE_PATHS = {
   rock: "/assets/png/default/tiles/tile_50.png",
   rockCluster: "/assets/png/default/tiles/tile_55.png",
 } as const;
+
+const EFFECT_TEXTURE_PATHS = {
+  fire: [
+    "/assets/png/default/effects/fire_1.png",
+    "/assets/png/default/effects/fire_2.png",
+  ],
+  explosion: [
+    "/assets/png/default/effects/explosion_1.png",
+    "/assets/png/default/effects/explosion_2.png",
+    "/assets/png/default/effects/explosion_3.png",
+  ],
+} as const;
+
+const ASSET_TEXTURE_PATHS = [
+  ...Object.values(SHIP_TEXTURE_PATHS),
+  ...Object.values(HEALTH_TEXTURE_PATHS),
+  ...Object.values(TILE_TEXTURE_PATHS),
+  ...Object.values(EFFECT_TEXTURE_PATHS).flat(),
+];
 
 const HEALTH_BAR_LAYOUT = {
   player: {
@@ -90,6 +109,14 @@ interface IslandDetail {
   readonly size: number;
 }
 
+interface EffectView {
+  readonly sprite: Sprite;
+  readonly textures: readonly Texture[];
+  ageSec: number;
+  readonly durationSec: number;
+  readonly size: number;
+}
+
 const ISLAND_DETAILS: readonly (readonly IslandDetail[])[] = [
   [
     { texture: "foliage", x: -0.2, y: -0.1, size: 0.78 },
@@ -111,7 +138,7 @@ const ISLAND_DETAILS: readonly (readonly IslandDetail[])[] = [
 
 export interface GameRenderer {
   readonly application: Application;
-  draw(state: GameState): void;
+  draw(state: GameState, deltaSeconds?: number): void;
   destroy(): void;
 }
 
@@ -249,7 +276,16 @@ function shipDamageTint(ship: Ship, config: GameConfig): number {
 export async function initializePixiRenderer(
   host: HTMLElement,
   config: GameConfig,
+  onAssetProgress: (progress: number) => void,
 ): Promise<GameRenderer> {
+  let loadedTextures = 0;
+  const loadTexture = async (path: string): Promise<Texture> => {
+    const texture = await Assets.load<Texture>(path);
+    loadedTextures += 1;
+    onAssetProgress((loadedTextures / ASSET_TEXTURE_PATHS.length) * 0.9);
+    return texture;
+  };
+
   const [
     playerTexture,
     chaserTexture,
@@ -268,24 +304,31 @@ export async function initializePixiRenderer(
     plantTexture,
     rockTexture,
     rockClusterTexture,
+    fireTextureOne,
+    fireTextureTwo,
+    explosionTextureOne,
+    explosionTextureTwo,
+    explosionTextureThree,
   ] = await Promise.all([
-    Assets.load<Texture>(SHIP_TEXTURE_PATHS.player),
-    Assets.load<Texture>(SHIP_TEXTURE_PATHS.chaser),
-    Assets.load<Texture>(SHIP_TEXTURE_PATHS.shooter),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.playerFrame),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.playerGreen),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.playerAmber),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.playerRed),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.enemyFrame),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.enemyGreen),
-    Assets.load<Texture>(HEALTH_TEXTURE_PATHS.enemyRed),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.water),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.sand),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.grass),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.foliage),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.plant),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.rock),
-    Assets.load<Texture>(TILE_TEXTURE_PATHS.rockCluster),
+    loadTexture(SHIP_TEXTURE_PATHS.player),
+    loadTexture(SHIP_TEXTURE_PATHS.chaser),
+    loadTexture(SHIP_TEXTURE_PATHS.shooter),
+    loadTexture(HEALTH_TEXTURE_PATHS.playerFrame),
+    loadTexture(HEALTH_TEXTURE_PATHS.playerGreen),
+    loadTexture(HEALTH_TEXTURE_PATHS.playerAmber),
+    loadTexture(HEALTH_TEXTURE_PATHS.playerRed),
+    loadTexture(HEALTH_TEXTURE_PATHS.enemyFrame),
+    loadTexture(HEALTH_TEXTURE_PATHS.enemyGreen),
+    loadTexture(HEALTH_TEXTURE_PATHS.enemyRed),
+    loadTexture(TILE_TEXTURE_PATHS.water),
+    loadTexture(TILE_TEXTURE_PATHS.sand),
+    loadTexture(TILE_TEXTURE_PATHS.grass),
+    loadTexture(TILE_TEXTURE_PATHS.foliage),
+    loadTexture(TILE_TEXTURE_PATHS.plant),
+    loadTexture(TILE_TEXTURE_PATHS.rock),
+    loadTexture(TILE_TEXTURE_PATHS.rockCluster),
+    ...EFFECT_TEXTURE_PATHS.fire.map(loadTexture),
+    ...EFFECT_TEXTURE_PATHS.explosion.map(loadTexture),
   ]);
   const textureByKind = {
     player: playerTexture,
@@ -309,6 +352,7 @@ export async function initializePixiRenderer(
     resolution: window.devicePixelRatio,
     resizeTo: host,
   });
+  onAssetProgress(1);
 
   const world = new Container();
   const water = new TilingSprite({
@@ -317,9 +361,16 @@ export async function initializePixiRenderer(
     height: config.arena.height,
   });
   const islandLayer = new Container();
+  const effectLayer = new Container();
   const entityLayer = new Container();
   const projectileGraphics = new Graphics();
-  world.addChild(water, islandLayer, entityLayer, projectileGraphics);
+  world.addChild(
+    water,
+    islandLayer,
+    effectLayer,
+    entityLayer,
+    projectileGraphics,
+  );
   application.stage.addChild(world);
   host.appendChild(application.canvas);
 
@@ -336,8 +387,58 @@ export async function initializePixiRenderer(
   }
 
   const shipViews = new Map<number, ShipViews>();
+  const effectViews: EffectView[] = [];
+  const processedStates = new WeakSet<GameState>();
 
-  const draw = (state: GameState): void => {
+  const addEffect = (
+    event: GameEvent,
+  ): void => {
+    let textures: readonly Texture[];
+    let durationSec: number;
+    let size: number;
+
+    if (event.type === "shot") {
+      textures = [fireTextureOne, fireTextureTwo];
+      durationSec = config.visual.shotEffectDurationSec;
+      size = config.visual.shotEffectSize;
+    } else if (event.type === "hit") {
+      textures = [explosionTextureThree];
+      durationSec = config.visual.hitEffectDurationSec;
+      size = config.visual.hitEffectSize;
+    } else {
+      const explosionTextures = {
+        player: [
+          explosionTextureThree,
+          explosionTextureTwo,
+          explosionTextureOne,
+        ],
+        chaser: [
+          explosionTextureOne,
+          explosionTextureTwo,
+          explosionTextureThree,
+        ],
+        shooter: [
+          explosionTextureTwo,
+          explosionTextureThree,
+          explosionTextureOne,
+        ],
+      };
+      textures = explosionTextures[event.kind];
+      durationSec = config.visual.explosionEffectDurationSec;
+      size = config.visual.explosionEffectSize;
+    }
+
+    const sprite = new Sprite(textures[0]);
+    sprite.anchor.set(0.5);
+    sprite.position.set(event.pos.x, event.pos.y);
+    if (event.type === "shot") {
+      sprite.rotation = event.angle;
+    }
+    effectLayer.addChild(sprite);
+    effectViews.push({ sprite, textures, ageSec: 0, durationSec, size });
+  };
+
+  const draw = (state: GameState, deltaSeconds = 0): void => {
     const screen = application.renderer.screen;
     const scale = Math.min(
       screen.width / config.arena.width,
@@ -348,6 +449,41 @@ export async function initializePixiRenderer(
       (screen.width - config.arena.width * scale) / 2,
       (screen.height - config.arena.height * scale) / 2,
     );
+
+    if (!processedStates.has(state)) {
+      for (const event of state.events) {
+        addEffect(event);
+      }
+      processedStates.add(state);
+    }
+
+    for (let index = effectViews.length - 1; index >= 0; index -= 1) {
+      const effect = effectViews[index];
+      if (state.status !== "paused") {
+        effect.ageSec += deltaSeconds;
+      }
+      const progress = effect.ageSec / effect.durationSec;
+      if (progress >= 1) {
+        effectLayer.removeChild(effect.sprite);
+        effect.sprite.destroy();
+        effectViews.splice(index, 1);
+        continue;
+      }
+
+      const clampedProgress = Math.max(0, progress);
+      const frameIndex = Math.min(
+        effect.textures.length - 1,
+        Math.floor(clampedProgress * effect.textures.length),
+      );
+      const scale =
+        config.visual.effectStartScale +
+        (config.visual.effectEndScale - config.visual.effectStartScale) *
+          clampedProgress;
+      effect.sprite.texture = effect.textures[frameIndex];
+      effect.sprite.width = effect.size * scale;
+      effect.sprite.height = effect.size * scale;
+      effect.sprite.alpha = 1 - clampedProgress;
+    }
 
     const visibleShips = [state.player, ...state.enemies];
     const visibleIds = new Set(visibleShips.map((ship) => ship.id));
@@ -390,6 +526,7 @@ export async function initializePixiRenderer(
         .circle(projectile.pos.x, projectile.pos.y, projectile.radius)
         .fill(PROJECTILE_COLORS[projectile.owner]);
     }
+
   };
 
   return {

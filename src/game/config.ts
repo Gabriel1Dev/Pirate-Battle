@@ -58,6 +58,14 @@ export interface GameConfig {
   };
   visual: {
     damageStages: readonly number[]; // hp ratios where the ship sprite degrades
+    shotEffectDurationSec: number;
+    hitEffectDurationSec: number;
+    explosionEffectDurationSec: number;
+    shotEffectSize: number;
+    hitEffectSize: number;
+    explosionEffectSize: number;
+    effectStartScale: number;
+    effectEndScale: number;
   };
 }
 
@@ -126,7 +134,17 @@ export const DEFAULT_CONFIG: GameConfig = {
     maxAttempts: 20,
     weights: { chaser: 0.5, shooter: 0.5 },
   },
-  visual: { damageStages: [0.66, 0.33] },
+  visual: {
+    damageStages: [0.66, 0.33],
+    shotEffectDurationSec: 0.18,
+    hitEffectDurationSec: 0.24,
+    explosionEffectDurationSec: 0.6,
+    shotEffectSize: 24,
+    hitEffectSize: 30,
+    explosionEffectSize: 72,
+    effectStartScale: 0.65,
+    effectEndScale: 1.2,
+  },
 };
 
 /** Limits for the Options screen (documented in README). */
