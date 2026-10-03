@@ -235,11 +235,17 @@ Open the local URL printed by Vite to play. Available validation commands:
 npm run build
 npx tsc -b --pretty false
 npm run lint
+npm run test:e2e
 npm run preview
 ```
 
 `npm run build` performs the TypeScript project build before creating the Vite
-production bundle. A Playwright test script has not been added yet.
+production bundle. Install the Playwright Chromium browser once with
+`npx playwright install chromium`. `npm run test:e2e` runs the suite against
+Chromium desktop and a mobile Chromium profile and writes the HTML report to
+`playwright-report/`; open it with `npm run test:e2e:report`. To intentionally
+replace screenshot baselines after reviewing a visual change, use
+`npm run test:e2e:update`.
 
 ### Implemented gameplay
 
@@ -278,7 +284,26 @@ scenarios. Selecting a scenario also updates the `scenario` query parameter;
 The mocks run in development and production and persist accepted mock matches
 locally in the browser.
 
-Automated Playwright tests and deployment are not implemented yet.
+Playwright currently covers options persistence, deterministic movement and
+combat/spawning, island and arena-boundary blocking, match end on player death,
+manual and focus-loss pause, fresh-match behavior, mobile touch controls,
+pending upload recovery, timeout-after-save idempotency, and ranking pagination
+plus empty/failure scenarios. Visual baselines cover the menu, paused arena, and
+completed result on both viewports; they are stored under
+`e2e/__screenshots__/`. Test traces and failure artifacts are written under the
+ignored `test-results/` directory. The latest validation passed the production
+build and 25 Playwright tests; the desktop-only run skips the mobile touch test.
+The production preview also confirmed that MSW starts, a completed match is
+submitted once, and its record appears in history and ranking.
+
+### Deploy to Vercel
+
+The repository includes `vercel.json` with the Vite build command and `dist`
+output directory. Import the GitHub repository in Vercel and deploy with the
+Vite framework preset. No environment variables or external API credentials are
+required: ranking and history are served by MSW in the production build. After
+deployment, open the public URL, confirm the Network demo selector works, and
+record the URL here for the challenge submission.
 
 In development, `window.__game` can read a copied simulation state, set the
 current input, advance a deterministic amount of simulation time, reset with a
