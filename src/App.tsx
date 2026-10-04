@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   createMatchConfig,
   DEFAULT_OPTIONS,
@@ -27,13 +26,7 @@ import {
 } from "./store/matchStorage";
 import { useMatchHistory, useRanking, useSubmitMatch } from "./api/queries";
 import type { MatchRecord } from "./api/contracts";
-import {
-  getNetworkScenario,
-  NETWORK_SCENARIOS,
-  resetNetworkScenario,
-  setNetworkScenario,
-  type NetworkScenario,
-} from "./mocks/scenarios";
+import { getNetworkScenario } from "./mocks/scenarios";
 
 type AppScreen = "menu" | "options" | "game";
 type MenuTab = "home" | "ranking" | "history";
@@ -70,9 +63,7 @@ export default function App(): React.JSX.Element {
   const [menuTab, setMenuTab] = useState<MenuTab>("home");
   const [rankingPage, setRankingPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
-  const [networkScenario, setCurrentNetworkScenario] = useState<NetworkScenario>(() =>
-    getNetworkScenario(),
-  );
+  const networkScenario = getNetworkScenario();
   const [gameSeed, setGameSeed] = useState(1);
   const [matchId, setMatchId] = useState(() => createMatchId());
   const [storedOptions, setStoredOptions] = useState<StoredOptionsResult>(() =>
@@ -84,7 +75,6 @@ export default function App(): React.JSX.Element {
   const [activeConfig, setActiveConfig] = useState<GameConfig>(() =>
     createMatchConfig(DEFAULT_OPTIONS),
   );
-  const queryClient = useQueryClient();
   const submitMatchMutation = useSubmitMatch();
   const { mutateAsync: submitMatchAsync } = submitMatchMutation;
   const attemptedMatchIds = useRef(new Set<string>());
@@ -275,18 +265,6 @@ export default function App(): React.JSX.Element {
     }
     retryAttempts.current.delete(match.matchId);
     void submitPendingMatch(match);
-  };
-
-  const selectNetworkScenario = (scenario: NetworkScenario): void => {
-    setNetworkScenario(scenario);
-    setCurrentNetworkScenario(scenario);
-    void queryClient.invalidateQueries();
-  };
-
-  const resetNetwork = (): void => {
-    resetNetworkScenario();
-    setCurrentNetworkScenario("success");
-    void queryClient.invalidateQueries();
   };
 
   const rankingContent = rankingQuery.isPending ? (
@@ -616,12 +594,11 @@ export default function App(): React.JSX.Element {
             {storedMatches.error}
           </p>
         )}
-        {storedMatches.matches.matches.length > 0 && (
+        {pendingMatches.length > 0 && (
           <p className="pending-match-status" role="status">
             {pendingMatches.length} match
             {pendingMatches.length === 1 ? "" : "es"} awaiting upload ·{" "}
-            {storedMatches.matches.matches.length - pendingMatches.length} saved
-            remotely.
+            saved on this device and will be retried.
           </p>
         )}
         {pendingMatches.length > 0 && (
@@ -679,37 +656,6 @@ export default function App(): React.JSX.Element {
             Match History
           </button>
         </nav>
-        <details className="network-demo-controls">
-          <summary>Network demo: {networkScenario}</summary>
-          <div className="network-demo-actions">
-            <label htmlFor="network-scenario">Scenario</label>
-            <select
-              id="network-scenario"
-              onChange={(event) => {
-                const selectedScenario = NETWORK_SCENARIOS.find(
-                  (scenario) => scenario === event.currentTarget.value,
-                );
-                if (selectedScenario) {
-                  selectNetworkScenario(selectedScenario);
-                }
-              }}
-              value={networkScenario}
-            >
-              {NETWORK_SCENARIOS.map((scenario) => (
-                <option key={scenario} value={scenario}>
-                  {scenario}
-                </option>
-              ))}
-            </select>
-            <button
-              className="text-action-button"
-              onClick={resetNetwork}
-              type="button"
-            >
-              Reset mock data
-            </button>
-          </div>
-        </details>
         <img
           className="menu-ship-decoration"
           src="/assets/png/default/ships/ship_1.png"

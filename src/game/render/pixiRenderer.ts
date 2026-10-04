@@ -9,6 +9,7 @@ import {
   TilingSprite,
 } from "pixi.js";
 import type { GameConfig, IslandConfig } from "../config";
+import { getIslandOutline, getIslandShapeScale } from "../islandShape";
 import type { GameEvent, GameState, Ship } from "../sim/types";
 
 const SHIP_TEXTURE_PATHS = {
@@ -35,10 +36,11 @@ const HEALTH_TEXTURE_PATHS = {
 const TILE_TEXTURE_PATHS = {
   islandSheet: "/assets/tilesheet/tiles_sheet.png",
   water: "/assets/png/default/tiles/tile_73.png",
-  foliage: "/assets/png/default/tiles/tile_70.png",
+  foliage: "/assets/png/default/tiles/tile_72.png",
   foliageLarge: "/assets/png/default/tiles/tile_71.png",
   rock: "/assets/png/default/tiles/tile_50.png",
 } as const;
+feat_ship_destruction_effects
 
 const ISLAND_GRASS_FRAME = new Rectangle(384, 128, 64, 64);
 const ISLAND_SAND_FRAME = new Rectangle(0, 0, 192, 192);
@@ -64,6 +66,22 @@ const DESTRUCTION_EFFECT_LIFETIME_SEC = 1.35;
 const WRECK_LIFETIME_SEC = 24;
 const MAX_DESTRUCTION_EFFECTS = 6;
 
+const CANNONBALL_TEXTURE_PATH = "/assets/png/default/ship_parts/cannon_ball.png";
+const MISC_TEXTURE_PATH =
+  "/assets/spritesheet/ships_miscellaneous_sheet.png";
+
+const ISLAND_BASE_FRAME = new Rectangle(320, 0, 256, 256);
+const MISC_FRAMES = {
+  cannon: new Rectangle(88, 422, 29, 16),
+  crew1: new Rectangle(511, 489, 22, 20),
+  crew2: new Rectangle(463, 489, 22, 20),
+  crew3: new Rectangle(487, 489, 22, 20),
+  dinghy: new Rectangle(606, 145, 20, 38),
+  wood: new Rectangle(408, 472, 26, 10),
+} as const;
+const WRECK_LIFETIME_SEC = 24;
+develop
+
 const EFFECT_TEXTURE_PATHS = {
   fire: [
     "/assets/png/default/effects/fire_1.png",
@@ -81,6 +99,10 @@ const ASSET_TEXTURE_PATHS = [
   ...Object.values(DAMAGED_SAIL_TEXTURE_PATHS),
   ...Object.values(HEALTH_TEXTURE_PATHS),
   ...Object.values(TILE_TEXTURE_PATHS),
+feat_ship_destruction_effects
+
+  CANNONBALL_TEXTURE_PATH,
+develop
   MISC_TEXTURE_PATH,
   ...Object.values(EFFECT_TEXTURE_PATHS).flat(),
 ];
@@ -99,15 +121,19 @@ const HEALTH_BAR_LAYOUT = {
 } as const;
 
 const WATER_COLOR = 0x15536b;
-const PROJECTILE_COLORS = {
-  player: 0xffdf77,
-  enemy: 0xff725e,
-} as const;
 
 interface ShipViews {
   readonly sprite: Sprite;
   readonly fireSprite: Sprite;
   readonly healthBar: HealthBarView;
+}
+
+interface WreckView {
+  readonly container: Container;
+  readonly crew: readonly Sprite[];
+  readonly originX: number;
+  readonly originY: number;
+  ageSec: number;
 }
 
 interface HealthBarView {
@@ -126,6 +152,7 @@ interface HealthTextures {
 
 interface IslandTextures {
   readonly base: Texture;
+  readonly cannon: Texture;
   readonly foliage: Texture;
   readonly foliageLarge: Texture;
   readonly rock: Texture;
@@ -185,27 +212,37 @@ interface DestructionTextures {
 
 const ISLAND_DETAILS: readonly (readonly IslandDetail[])[] = [
   [
-    { texture: "foliage", x: -0.2, y: -0.1, size: 0.42 },
-    { texture: "foliageLarge", x: 0.23, y: 0.24, size: 0.35 },
-    { texture: "rock", x: -0.35, y: 0.34, size: 0.23 },
+    { texture: "foliage", x: -0.2, y: -0.08, size: 0.88 },
+    { texture: "foliageLarge", x: 0.23, y: 0.18, size: 0.76 },
+    { texture: "foliageLarge", x: -0.08, y: 0.39, size: 0.58 },
+    { texture: "rock", x: -0.39, y: 0.35, size: 0.26 },
+    { texture: "rock", x: 0.38, y: -0.34, size: 0.22 },
   ],
   [
-    { texture: "foliage", x: 0.14, y: -0.18, size: 0.42 },
-    { texture: "foliageLarge", x: -0.25, y: 0.25, size: 0.33 },
-    { texture: "rock", x: 0.33, y: 0.34, size: 0.23 },
+    { texture: "foliage", x: 0.14, y: -0.16, size: 0.88 },
+    { texture: "foliageLarge", x: -0.27, y: 0.2, size: 0.76 },
+    { texture: "foliageLarge", x: 0.04, y: 0.39, size: 0.58 },
+    { texture: "rock", x: 0.39, y: 0.35, size: 0.26 },
+    { texture: "rock", x: -0.38, y: -0.34, size: 0.22 },
   ],
   [
-    { texture: "foliage", x: -0.23, y: 0.05, size: 0.42 },
-    { texture: "foliageLarge", x: 0.22, y: 0.3, size: 0.34 },
-    { texture: "rock", x: -0.38, y: 0.36, size: 0.22 },
+    { texture: "foliage", x: -0.23, y: 0.04, size: 0.88 },
+    { texture: "foliageLarge", x: 0.24, y: 0.22, size: 0.76 },
+    { texture: "foliageLarge", x: -0.02, y: -0.39, size: 0.58 },
+    { texture: "rock", x: -0.39, y: 0.35, size: 0.26 },
+    { texture: "rock", x: 0.38, y: -0.34, size: 0.22 },
   ],
 ];
 
 export interface GameRenderer {
   readonly application: Application;
   draw(state: GameState, deltaSeconds?: number): void;
+feat_ship_destruction_effects
   getCreatedDestructionFragmentCount(): number;
   getRenderedShipIds(): readonly number[];
+=======
+  getWreckCount(): number;
+develop
   destroy(): void;
 }
 
@@ -399,15 +436,31 @@ function createIslandView(
   const islandView = new Container();
   islandView.position.set(island.x - center, island.y - center);
 
+  const shape = getIslandShapeScale(index);
+  const islandSize = island.radius * 2.75;
+  for (const [ringIndex, ring] of [1.2, 1.1].entries()) {
+    const shoreline = new Graphics();
+    const points = getIslandOutline(
+      island.radius,
+      index,
+      (islandSize / (2 * island.radius)) * ring,
+    ).flatMap((point) => [center + point.x, center + point.y]);
+    shoreline.poly(points).fill({
+      color: ringIndex === 0 ? 0x76dce5 : 0xb7f0df,
+      alpha: ringIndex === 0 ? 0.18 : 0.2,
+    });
+    islandView.addChild(shoreline);
+  }
+
   const ground = new Sprite(textures.base);
   ground.anchor.set(0.5);
   ground.position.set(center, center);
-  ground.width = island.radius * 2.35;
-  ground.height = island.radius * 2.35;
+  ground.width = islandSize * shape.scaleX;
+  ground.height = islandSize * shape.scaleY;
   islandView.addChild(ground);
 
   const details = ISLAND_DETAILS[index % ISLAND_DETAILS.length];
-  for (const detail of details) {
+  for (const [detailIndex, detail] of details.entries()) {
     const sprite = new Sprite(textures[detail.texture]);
     const size = island.radius * detail.size;
     sprite.anchor.set(0.5);
@@ -417,56 +470,164 @@ function createIslandView(
     );
     sprite.width = size;
     sprite.height = size;
+    sprite.rotation = ((detailIndex + index) % 2 === 0 ? -1 : 1) * 0.12;
     islandView.addChild(sprite);
   }
+
+  const cannon = new Sprite(textures.cannon);
+  cannon.anchor.set(0.5);
+  cannon.position.set(center + island.radius * 0.42, center - island.radius * 0.2);
+  cannon.width = island.radius * 0.72;
+  cannon.height = island.radius * 0.4;
+  cannon.rotation = (index % 2 === 0 ? -1 : 1) * 0.25;
+  islandView.addChild(cannon);
 
   return islandView;
 }
 
+function createFrameTexture(
+  atlasTexture: Texture,
+  frame: Rectangle,
+): Texture {
+  return new Texture({ source: atlasTexture.source, frame });
+}
+
+function createWreckView(
+  position: { readonly x: number; readonly y: number },
+  textures: readonly Texture[],
+): WreckView {
+  const [dinghyTexture, crew1Texture, crew2Texture, crew3Texture, woodTexture] =
+    textures;
+  const container = new Container();
+  container.position.set(position.x, position.y);
+
+  const dinghy = new Sprite(dinghyTexture);
+  dinghy.anchor.set(0.5);
+  dinghy.position.set(2, -2);
+  dinghy.width = 36;
+  dinghy.height = 68;
+  dinghy.rotation = -0.16;
+  container.addChild(dinghy);
+
+  const crewTextures = [crew1Texture, crew2Texture, crew3Texture] as const;
+  const crewPositions = [
+    { x: -3, y: -10 },
+    { x: 4, y: 1 },
+    { x: -27, y: 23 },
+  ] as const;
+  const crew = crewTextures.map((texture, index) => {
+    const sprite = new Sprite(texture);
+    sprite.anchor.set(0.5);
+    sprite.position.set(crewPositions[index].x, crewPositions[index].y);
+    sprite.width = index === 2 ? 21 : 20;
+    sprite.height = index === 2 ? 19 : 18;
+    container.addChild(sprite);
+    return sprite;
+  });
+
+  for (const [index, offset] of [
+    { x: 32, y: -27 },
+    { x: -34, y: -18 },
+  ].entries()) {
+    const wood = new Sprite(woodTexture);
+    wood.anchor.set(0.5);
+    wood.position.set(offset.x, offset.y);
+    wood.width = index === 0 ? 24 : 19;
+    wood.height = 9;
+    wood.rotation = index === 0 ? 0.7 : -0.3;
+    container.addChild(wood);
+  }
+
+  return {
+    container,
+    crew,
+    originX: position.x,
+    originY: position.y,
+    ageSec: 0,
+  };
+}
+
 function createIslandTexture(atlasTexture: Texture): Texture {
-  const sandFrame = ISLAND_SAND_FRAME;
-  const grassFrame = ISLAND_GRASS_FRAME;
-  const size = sandFrame.width;
+  const frame = ISLAND_BASE_FRAME;
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = frame.width;
+  canvas.height = frame.height;
   const context = canvas.getContext("2d");
 
   if (!context) {
-    throw new Error("Unable to prepare the island grass texture.");
+    throw new Error("Unable to prepare the island texture.");
   }
 
-  context.drawImage(
-    atlasTexture.source.resource,
-    sandFrame.x,
-    sandFrame.y,
-    sandFrame.width,
-    sandFrame.height,
-    0,
-    0,
-    size,
-    size,
-  );
   context.beginPath();
-  context.moveTo(96, 53);
-  context.bezierCurveTo(120, 49, 143, 66, 136, 88);
-  context.bezierCurveTo(150, 108, 127, 132, 109, 135);
-  context.bezierCurveTo(95, 151, 75, 136, 63, 132);
-  context.bezierCurveTo(42, 128, 50, 103, 48, 87);
-  context.bezierCurveTo(46, 65, 73, 51, 96, 53);
+  context.moveTo(128, 4);
+  context.bezierCurveTo(171, -2, 232, 13, 250, 54);
+  context.bezierCurveTo(268, 91, 249, 119, 253, 151);
+  context.bezierCurveTo(250, 198, 220, 240, 178, 249);
+  context.bezierCurveTo(143, 263, 111, 242, 75, 251);
+  context.bezierCurveTo(35, 242, 7, 210, 12, 170);
+  context.bezierCurveTo(-1, 137, 9, 105, 4, 77);
+  context.bezierCurveTo(13, 38, 52, 8, 94, 13);
+  context.bezierCurveTo(107, 7, 118, 4, 128, 4);
   context.closePath();
   context.clip();
   context.drawImage(
     atlasTexture.source.resource,
-    grassFrame.x,
-    grassFrame.y,
-    grassFrame.width,
-    grassFrame.height,
-    47,
-    51,
-    100,
-    100,
+    frame.x,
+    frame.y,
+    frame.width,
+    frame.height,
+    0,
+    0,
+    frame.width,
+    frame.height,
   );
+
+  const softenedTexture = document.createElement("canvas");
+  softenedTexture.width = frame.width;
+  softenedTexture.height = frame.height;
+  const softenedContext = softenedTexture.getContext("2d");
+  if (!softenedContext) {
+    throw new Error("Unable to blend the island texture seams.");
+  }
+  softenedContext.filter = "blur(16px)";
+  softenedContext.drawImage(canvas, 0, 0);
+  softenedContext.filter = "none";
+
+  for (const axis of ["x", "y"] as const) {
+    const seamMask = document.createElement("canvas");
+    seamMask.width = frame.width;
+    seamMask.height = frame.height;
+    const maskContext = seamMask.getContext("2d");
+    if (!maskContext) {
+      throw new Error("Unable to prepare the island seam mask.");
+    }
+
+    const gradient =
+      axis === "x"
+        ? maskContext.createLinearGradient(0, 0, frame.width, 0)
+        : maskContext.createLinearGradient(0, 0, 0, frame.height);
+    const seamPosition = 0.5;
+    const feather = 28 / frame.width;
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(seamPosition - feather, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(seamPosition, "rgba(0, 0, 0, 0.9)");
+    gradient.addColorStop(seamPosition + feather, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    maskContext.fillStyle = gradient;
+    maskContext.fillRect(0, 0, frame.width, frame.height);
+
+    const seamBlend = document.createElement("canvas");
+    seamBlend.width = frame.width;
+    seamBlend.height = frame.height;
+    const blendContext = seamBlend.getContext("2d");
+    if (!blendContext) {
+      throw new Error("Unable to blend the island texture seams.");
+    }
+    blendContext.drawImage(softenedTexture, 0, 0);
+    blendContext.globalCompositeOperation = "destination-in";
+    blendContext.drawImage(seamMask, 0, 0);
+    context.drawImage(seamBlend, 0, 0);
+  }
 
   return Texture.from(canvas);
 }
@@ -590,6 +751,8 @@ export async function initializePixiRenderer(
     enemyGreenTexture,
     enemyRedTexture,
     waterTexture,
+    cannonballTexture,
+    miscellaneousTexture,
     islandSheetTexture,
     foliageTexture,
     foliageLargeTexture,
@@ -615,6 +778,8 @@ export async function initializePixiRenderer(
     loadTexture(HEALTH_TEXTURE_PATHS.enemyGreen),
     loadTexture(HEALTH_TEXTURE_PATHS.enemyRed),
     loadTexture(TILE_TEXTURE_PATHS.water),
+    loadTexture(CANNONBALL_TEXTURE_PATH),
+    loadTexture(MISC_TEXTURE_PATH),
     loadTexture(TILE_TEXTURE_PATHS.islandSheet),
     loadTexture(TILE_TEXTURE_PATHS.foliage),
     loadTexture(TILE_TEXTURE_PATHS.foliageLarge),
@@ -654,10 +819,18 @@ export async function initializePixiRenderer(
   ];
   const islandTextures: IslandTextures = {
     base: createIslandTexture(islandSheetTexture),
+    cannon: createFrameTexture(miscellaneousTexture, MISC_FRAMES.cannon),
     foliage: foliageTexture,
     foliageLarge: foliageLargeTexture,
     rock: rockTexture,
   };
+  const wreckTextures = [
+    MISC_FRAMES.dinghy,
+    MISC_FRAMES.crew1,
+    MISC_FRAMES.crew2,
+    MISC_FRAMES.crew3,
+    MISC_FRAMES.wood,
+  ].map((frame) => createFrameTexture(miscellaneousTexture, frame));
   const textureByKind = {
     player: playerTexture,
     chaser: chaserTexture,
@@ -692,16 +865,26 @@ export async function initializePixiRenderer(
   const wreckLayer = new Container();
   const effectLayer = new Container();
   const entityLayer = new Container();
+feat_ship_destruction_effects
   const destructionLayer = new Container();
   const projectileGraphics = new Graphics();
+=======
+  const projectileTrailGraphics = new Graphics();
+  const projectileLayer = new Container();
+develop
   world.addChild(
     water,
     islandLayer,
     wreckLayer,
     effectLayer,
     entityLayer,
+feat_ship_destruction_effects
     destructionLayer,
     projectileGraphics,
+
+    projectileTrailGraphics,
+    projectileLayer,
+develop
   );
   application.stage.addChild(world);
   host.appendChild(application.canvas);
@@ -711,10 +894,15 @@ export async function initializePixiRenderer(
   }
 
   const shipViews = new Map<number, ShipViews>();
+  const projectileViews = new Map<number, Sprite>();
   const effectViews: EffectView[] = [];
+feat_ship_destruction_effects
   const destructionViews: DestructionView[] = [];
   const wreckViews: WreckView[] = [];
   let createdDestructionFragmentCount = 0;
+
+  const wreckViews: WreckView[] = [];
+develop
   const processedStates = new WeakSet<GameState>();
 
   const addEffect = (
@@ -733,6 +921,17 @@ export async function initializePixiRenderer(
       durationSec = config.visual.hitEffectDurationSec;
       size = config.visual.hitEffectSize;
     } else {
+      const wreck = createWreckView(event.pos, wreckTextures);
+      wreckLayer.addChild(wreck.container);
+      wreckViews.push(wreck);
+      if (wreckViews.length > 6) {
+        const oldest = wreckViews.shift();
+        if (oldest) {
+          wreckLayer.removeChild(oldest.container);
+          oldest.container.destroy({ children: true });
+        }
+      }
+
       const explosionTextures = {
         player: [
           explosionTextureThree,
@@ -863,6 +1062,7 @@ export async function initializePixiRenderer(
       effect.sprite.alpha = 1 - clampedProgress;
     }
 
+feat_ship_destruction_effects
     for (let index = destructionViews.length - 1; index >= 0; index -= 1) {
       const destruction = destructionViews[index];
       if (state.status !== "paused") {
@@ -907,6 +1107,8 @@ export async function initializePixiRenderer(
       }
     }
 
+
+develop
     for (let index = wreckViews.length - 1; index >= 0; index -= 1) {
       const wreck = wreckViews[index];
       if (state.status !== "paused") {
@@ -932,6 +1134,7 @@ export async function initializePixiRenderer(
       );
       wreck.container.rotation = Math.sin(wreck.ageSec * 0.45) * 0.035;
       wreck.container.alpha = 1 - fadeProgress;
+feat_ship_destruction_effects
       wreck.crew.forEach((crew, crewIndex) => {
         const baseY = crewIndex === 0 ? -10 : crewIndex === 1 ? 1 : 23;
         crew.position.y = baseY + Math.sin(wreck.ageSec * 2 + crewIndex) * 1.2;
@@ -945,6 +1148,15 @@ export async function initializePixiRenderer(
     const visibleShips = playerDestroyed
       ? state.enemies
       : [state.player, ...state.enemies];
+
+      wreck.crew.forEach((crew, index) => {
+        const baseY = index === 0 ? -10 : index === 1 ? 1 : 23;
+        crew.position.y = baseY + Math.sin(wreck.ageSec * 2 + index) * 1.2;
+      });
+    }
+
+    const visibleShips = [state.player, ...state.enemies];
+develop
     const visibleIds = new Set(visibleShips.map((ship) => ship.id));
 
     for (const [id, view] of shipViews) {
@@ -1012,11 +1224,58 @@ export async function initializePixiRenderer(
       drawHealthBar(view.healthBar, ship, healthTextures, config);
     }
 
-    projectileGraphics.clear();
+    projectileTrailGraphics.clear();
+    const visibleProjectileIds = new Set(state.projectiles.map(({ id }) => id));
+    for (const [id, sprite] of projectileViews) {
+      if (!visibleProjectileIds.has(id)) {
+        projectileLayer.removeChild(sprite);
+        sprite.destroy();
+        projectileViews.delete(id);
+      }
+    }
+
     for (const projectile of state.projectiles) {
-      projectileGraphics
-        .circle(projectile.pos.x, projectile.pos.y, projectile.radius)
-        .fill(PROJECTILE_COLORS[projectile.owner]);
+      const velocityLength = Math.hypot(projectile.vel.x, projectile.vel.y);
+      if (velocityLength > 0) {
+        const trailLength = projectile.radius * 4;
+        const trailX =
+          projectile.pos.x -
+          (projectile.vel.x / velocityLength) * trailLength;
+        const trailY =
+          projectile.pos.y -
+          (projectile.vel.y / velocityLength) * trailLength;
+        const trailColor =
+          projectile.owner === "player" ? 0xd4f5ff : 0xffe0cf;
+        projectileTrailGraphics
+          .moveTo(trailX, trailY)
+          .lineTo(projectile.pos.x, projectile.pos.y)
+          .stroke({
+            color: trailColor,
+            alpha: 0.16,
+            width: projectile.radius * 0.9,
+            cap: "round",
+          })
+          .moveTo(trailX, trailY)
+          .lineTo(projectile.pos.x, projectile.pos.y)
+          .stroke({
+            color: 0xfff8e8,
+            alpha: 0.56,
+            width: Math.max(1, projectile.radius * 0.24),
+            cap: "round",
+          });
+      }
+
+      let sprite = projectileViews.get(projectile.id);
+      if (!sprite) {
+        sprite = new Sprite(cannonballTexture);
+        sprite.anchor.set(0.5);
+        projectileLayer.addChild(sprite);
+        projectileViews.set(projectile.id, sprite);
+      }
+      sprite.position.set(projectile.pos.x, projectile.pos.y);
+      sprite.rotation = Math.atan2(projectile.vel.y, projectile.vel.x);
+      sprite.width = projectile.radius * 2;
+      sprite.height = projectile.radius * 2;
     }
 
   };
@@ -1024,17 +1283,27 @@ export async function initializePixiRenderer(
   return {
     application,
     draw,
+feat_ship_destruction_effects
     getCreatedDestructionFragmentCount: () =>
       createdDestructionFragmentCount,
     getRenderedShipIds: () => [...shipViews.keys()],
+
+    getWreckCount: () => wreckViews.length,
+develop
     destroy(): void {
       application.destroy({ removeView: true }, { children: true });
       Object.values(damagedTextureByKind).forEach((texture) =>
         texture.destroy(true),
       );
       islandTextures.base.destroy(true);
+ feat_ship_destruction_effects
       destructionFrameTextures.forEach((texture) => texture.destroy(false));
+
+      islandTextures.cannon.destroy(false);
+      wreckTextures.forEach((texture) => texture.destroy(false));
+develop
       shipViews.clear();
+      projectileViews.clear();
     },
   };
 }

@@ -1,4 +1,5 @@
 import type { GameState, Projectile, Vec2 } from "./types";
+import { segmentIntersectsIsland } from "./geometry";
 
 interface Impact {
   readonly amount: number;
@@ -69,12 +70,7 @@ function getImpact(
 
   for (const island of state.islands) {
     considerImpact(
-      segmentCircleIntersection(
-        start,
-        end,
-        island.pos,
-        island.radius + projectile.radius,
-      ),
+      segmentIntersectsIsland(start, end, island, projectile.radius),
       "island",
     );
   }

@@ -37,6 +37,7 @@ export interface Projectile {
 export interface Island {
   pos: Vec2;
   radius: number;
+  outline: readonly Vec2[];
 }
 
 export interface InputState {

@@ -48,8 +48,12 @@ declare global {
   interface Window {
     __game?: {
       getState(): BrowserGameState | null;
+ feat_ship_destruction_effects
       getCreatedDestructionFragmentCount(): number;
       getRenderedShipIds(): readonly number[];
+=======
+      getWreckCount(): number;
+
       setInput(input: {
         forward?: boolean;
         turnLeft?: boolean;
@@ -94,6 +98,51 @@ async function setNetworkScenario(page: Page, scenario: string): Promise<void> {
   }, scenario);
 }
 
+test("waits for the mock API before showing the main menu", async ({
+  page,
+}) => {
+  await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+
+  const apiResponses = await page.evaluate(async () => {
+    const healthResponse = await fetch("/api/health");
+    const health = (await healthResponse.json()) as { status?: string };
+    const match = {
+      matchId: "startup-readiness-match",
+      playerId: "local-player",
+      completedAt: new Date().toISOString(),
+      score: 0,
+      durationSec: 1,
+      endReason: "time",
+      config: {},
+    };
+    const submit = (): Promise<Response> =>
+      fetch("/api/matches", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": match.matchId,
+        },
+        body: JSON.stringify(match),
+      });
+    const firstSubmission = await submit();
+    const duplicateSubmission = await submit();
+
+    return {
+      healthStatus: healthResponse.status,
+      health,
+      firstSubmissionStatus: firstSubmission.status,
+      duplicateSubmissionStatus: duplicateSubmission.status,
+    };
+  });
+
+  expect(apiResponses).toEqual({
+    healthStatus: 200,
+    health: { status: "ok" },
+    firstSubmissionStatus: 201,
+    duplicateSubmissionStatus: 200,
+  });
+});
+
 test("saves validated match options across a reload", async ({ page }) => {
   await page.getByRole("button", { name: "OPTIONS" }).click();
 
@@ -119,11 +168,51 @@ test("saves validated match options across a reload", async ({ page }) => {
   ).toHaveValue("4");
 });
 
-test("retries loading the battle after an asset request fails", async ({
+test("confirms that in-match options apply to the next match", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "PLAY" }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.waitForFunction(() => window.__game?.getState() !== null);
+  await page.getByRole("button", { name: "Pause battle" }).click();
+  await expect(page.getByRole("heading", { name: "PAUSED" })).toBeVisible();
+  await page.getByRole("button", { name: "OPTIONS" }).click();
+  await page.getByRole("spinbutton", { name: "Game session time" }).fill("120");
+  await page.getByRole("button", { name: "SAVE OPTIONS" }).click();
+
+  await expect(page.getByRole("heading", { name: "NEXT VOYAGE" })).toBeVisible();
+  await expect(
+    page.getByText(/These settings will take effect in your next match/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "CONTINUE PLAYING" }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__game?.getState()?.status))
+    .toBe("running");
+  expect(
+    await page.evaluate(
+      () => window.__game?.getState()?.config.match.durationSec,
+    ),
+  ).toBe(90);
+
+  await page.getByRole("button", { name: "Pause battle" }).click();
+  await page.getByRole("button", { name: "OPTIONS" }).click();
+  await page.getByRole("spinbutton", { name: "Game session time" }).fill("121");
+  await page.getByRole("button", { name: "SAVE OPTIONS" }).click();
+  await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
+  await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+
+  await page.getByRole("button", { name: "PLAY" }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.waitForFunction(
+    () => window.__game?.getState()?.config.match.durationSec === 121,
+  );
+});
+
+test("does not show the game when mock API startup fails", async ({
   page,
   isMobile,
 }) => {
-  test.skip(isMobile, "Asset loader retry is verified in the desktop profile.");
+  test.skip(isMobile, "Startup failure is verified in the desktop profile.");
   await page.evaluate(async () => {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
@@ -135,30 +224,23 @@ test("retries loading the battle after an asset request fails", async ({
       options,
     ) {
       if (String(scriptURL).includes("mockServiceWorker")) {
-        throw new Error("MSW is disabled for the asset failure test.");
+        throw new Error("MSW is unavailable for this test.");
       }
       throw new Error(`Unexpected service worker registration: ${String(options)}`);
     };
   });
-  let failedRequests = 0;
-  await page.route("**/*", async (route) => {
-    if (route.request().url().includes("/assets/png/default/ships/ship_1.png")) {
-      failedRequests += 1;
-      if (failedRequests <= 2) {
-        await route.abort("failed");
-        return;
-      }
-    }
-    await route.continue();
-  });
   await page.goto("/");
-  await page.getByRole("button", { name: "PLAY" }).click();
+
   await expect(
-    page.getByRole("heading", { name: "Unable to load the battle" }),
+    page.getByRole("heading", { name: "Unable to start Pirate Battle" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "RETRY LOADING" }).click();
-  await expect(page.locator("canvas")).toBeVisible();
-  expect(failedRequests).toBeGreaterThanOrEqual(3);
+  await expect(page.getByRole("button", { name: "PLAY" })).toHaveCount(0);
+  await expect(page.locator("canvas")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Unable to start Pirate Battle" }),
+  ).toBeVisible();
 });
 
 test("advances the seeded simulation, fires, and spawns both enemy types", async ({
@@ -218,6 +300,14 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
     const cooldownShots = cooldownState.stats.shotsFired;
 
     hook.reset(19);
+    const turnDuration =
+      Math.PI / (2 * (hook.getState()?.config.player.turnSpeed ?? 1));
+    hook.setInput({ turnLeft: true });
+    hook.advanceBy(turnDuration);
+    hook.setInput({ forward: true });
+    hook.advanceBy(1.55);
+    hook.setInput({ turnRight: true });
+    hook.advanceBy(turnDuration);
     for (let elapsed = 0; elapsed < 24; elapsed += 0.25) {
       const state = hook.getState();
       if (!state || state.status !== "running") {
@@ -243,6 +333,7 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
           Math.cos(targetAngle - state.player.angle),
         );
         hook.setInput({
+          forward: true,
           turnLeft: angleDifference < 0,
           turnRight: angleDifference >= 0,
           fireFront: true,
@@ -258,12 +349,28 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
     if (!state) {
       throw new Error("The deterministic game state was lost.");
     }
+    const pursuitDamage = state.stats.damageTaken;
+    hook.reset(19);
+    hook.setInput({
+      fireFront: true,
+      fireLeft: true,
+      fireRight: true,
+    });
+    hook.advanceBy(24);
+    const stationaryState = hook.getState();
+    if (!stationaryState) {
+      throw new Error("The stationary combat state was lost.");
+    }
     return {
       cooldownShots,
       score: state.score,
       destroyed: state.stats.enemiesDestroyed,
-      damageTaken: state.stats.damageTaken,
-      shotsFired: state.stats.shotsFired,
+      wrecks: hook.getWreckCount(),
+      damageTaken: Math.max(pursuitDamage, stationaryState.stats.damageTaken),
+      shotsFired: Math.max(
+        state.stats.shotsFired,
+        stationaryState.stats.shotsFired,
+      ),
     };
   });
 
@@ -272,6 +379,7 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
   expect(result.shotsFired).toBeGreaterThan(0);
   expect(result.damageTaken).toBeGreaterThan(0);
   expect(result.destroyed).toBeGreaterThan(0);
+  expect(result.wrecks).toBeGreaterThan(0);
   expect(result.score).toBe(result.destroyed);
 });
 
@@ -322,6 +430,18 @@ test("stops the player at island and arena boundaries", async ({ page }) => {
   );
   expect(islandBlockedState?.player.pos.x).toBeGreaterThan(
     islandBlockedState?.player.radius ?? 0,
+  );
+  const islandDistance = Math.hypot(
+    (blockingIsland?.x ?? 0) - (islandBlockedState?.player.pos.x ?? 0),
+    (blockingIsland?.y ?? 0) - (islandBlockedState?.player.pos.y ?? 0),
+  );
+  expect(islandDistance).toBeGreaterThan(
+    (blockingIsland?.radius ?? 0) +
+      (islandBlockedState?.player.radius ?? 0),
+  );
+  expect(islandDistance).toBeLessThanOrEqual(
+    (blockingIsland?.radius ?? 0) * 1.45 +
+      (islandBlockedState?.player.radius ?? 0),
   );
 
   const positionAtIsland = islandBlockedState?.player.pos;
@@ -417,6 +537,7 @@ test("ends and saves the match when the player is destroyed", async ({
   expect(endedState?.status).toBe("ended");
   expect(endedState?.endReason).toBe("death");
   expect(endedState?.player.hp).toBe(0);
+ feat_ship_destruction_effects
   expect(
     await page.evaluate(
       () => window.__game?.getCreatedDestructionFragmentCount() ?? 0,
@@ -425,6 +546,9 @@ test("ends and saves the match when the player is destroyed", async ({
   expect(
     await page.evaluate(() => window.__game?.getRenderedShipIds()),
   ).not.toContain(1);
+
+  expect(await page.evaluate(() => window.__game?.getWreckCount())).toBe(1);
+>>>>>>> develop
   expect(endedState?.elapsedSec).toBeLessThan(
     endedState?.config.match.durationSec ?? 0,
   );
@@ -682,29 +806,20 @@ test("shows paginated ranking and selectable empty and failure scenarios", async
   await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
 });
 
-test("selects network scenarios and resets mock data from the menu", async ({
+test("hides network demo controls while keeping mock scenarios URL-selectable", async ({
   page,
 }) => {
-  const scenarioDisclosure = page.getByText("Network demo: success");
-  await scenarioDisclosure.click();
-  await page.getByLabel("Scenario").selectOption("empty");
-  await expect(page).toHaveURL(/scenario=empty/);
-  await expect(page.getByText("Network demo: empty")).toBeVisible();
+  await expect(page.getByText(/Network demo:/)).toHaveCount(0);
+  await expect(page.getByLabel("Scenario")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset mock data" })).toHaveCount(
+    0,
+  );
 
+  await page.goto("/?scenario=empty");
   await page.getByRole("button", { name: "Ranking" }).click();
   await expect(page.getByText("No ranking entries yet.")).toBeVisible();
-  await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
-  await page.getByText("Network demo: empty").click();
-  await page.getByRole("button", { name: "Reset mock data" }).click();
 
-  await expect(page.getByText("Network demo: success")).toBeVisible();
-  await expect(page).not.toHaveURL(/scenario=/);
-  const resetStorage = await page.evaluate(() => ({
-    scenario: window.localStorage.getItem("pirate-battle.network-scenario.v1"),
-    matches: window.localStorage.getItem("pirate-battle.mock-matches.v1"),
-  }));
-  expect(resetStorage).toEqual({ scenario: null, matches: null });
-
+  await page.goto("/");
   await page.getByRole("button", { name: "Ranking" }).click();
   await expect(page.getByText("Captain Rowan")).toBeVisible();
 });
@@ -737,10 +852,23 @@ test("upserts a match once when the server saves before timing out", async ({
   await expect(page.getByRole("heading", { name: "VOYAGE COMPLETE" })).toBeVisible();
 
   await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText(
-    "0 matches awaiting upload · 1 saved remotely.",
-    { timeout: 15_000 },
-  );
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const stored = window.localStorage.getItem("pirate-battle.matches.v1");
+          if (!stored) {
+            return null;
+          }
+          const parsed = JSON.parse(stored) as {
+            readonly matches: readonly { readonly submissionStatus: string }[];
+          };
+          return parsed.matches[0]?.submissionStatus ?? null;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe("confirmed");
+  await expect(page.getByRole("status")).toHaveCount(0);
 
   const persistedMatches = await page.evaluate(() => {
     const stored = window.localStorage.getItem("pirate-battle.matches.v1");
