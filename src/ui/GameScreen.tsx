@@ -120,6 +120,10 @@ export function GameScreen({
   onRestart,
   onSaveOptions,
 }: GameScreenProps): React.JSX.Element {
+  const onExitRef = useRef(onExit);
+  useEffect(() => {
+    onExitRef.current = onExit;
+  }, [onExit]);
   const hostRef = useRef<HTMLDivElement>(null);
   const gameStateRef = useRef<GameState | null>(null);
   const inputStateRef = useRef<InputState>({ ...EMPTY_INPUT });
@@ -144,6 +148,7 @@ export function GameScreen({
     }
 
     let cancelled = false;
+    let exitRequested = false;
     let manualClock = false;
     let hudElapsedSeconds = 0;
     let matchWasPersisted = false;
@@ -188,23 +193,19 @@ export function GameScreen({
       }
     };
 
-    const handlePause = (): void => {
-      const state = gameStateRef.current;
-      if (!state) {
+    const handleScreenChange = (): void => {
+      if (exitRequested) {
         return;
       }
 
-      const pausedState = pauseGame(state);
-      if (pausedState !== state) {
-        audio.pause();
-      }
-      gameStateRef.current = pausedState;
+      exitRequested = true;
       inputRef.current?.clear();
-      setHud(createHudSnapshot(pausedState));
+      audio.pause();
+      onExitRef.current();
     };
     const handleVisibilityChange = (): void => {
       if (document.hidden) {
-        handlePause();
+        handleScreenChange();
       }
     };
     const testHook: GameTestHook = {
@@ -260,7 +261,7 @@ export function GameScreen({
       window.__game = testHook;
     }
 
-    window.addEventListener("blur", handlePause);
+    window.addEventListener("blur", handleScreenChange);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     void initializePixiRenderer(host, initialState.config, (progress) => {
@@ -329,7 +330,7 @@ export function GameScreen({
       if (window.__game === testHook) {
         delete window.__game;
       }
-      window.removeEventListener("blur", handlePause);
+      window.removeEventListener("blur", handleScreenChange);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       inputRef.current?.destroy();
       inputRef.current = null;

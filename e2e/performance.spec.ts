@@ -25,11 +25,12 @@ declare global {
   }
 }
 
-test("profiles a three-minute match and five game lifecycle cycles", async ({
+test("profiles a three-minute match and twenty game lifecycle cycles", async ({
   page,
   isMobile,
   browser,
 }) => {
+  test.setTimeout(60_000);
   test.skip(isMobile, "Profiling evidence uses the desktop 1280x720 viewport.");
 
   await page.addInitScript(() => {
@@ -143,8 +144,9 @@ test("profiles a three-minute match and five game lifecycle cycles", async ({
   expect(simulationMetrics.elapsedSec).toBe(180);
 
   const heapSamplesMb: number[] = [];
+  const cdpSession = await page.context().newCDPSession(page);
   await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
-  for (let cycle = 0; cycle < 5; cycle += 1) {
+  for (let cycle = 0; cycle < 20; cycle += 1) {
     await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
     await page.getByRole("button", { name: "PLAY" }).click();
     await expect(page.locator("canvas")).toBeVisible();
@@ -152,18 +154,11 @@ test("profiles a three-minute match and five game lifecycle cycles", async ({
     await page.waitForTimeout(1500);
     await page.getByRole("button", { name: "Main menu" }).click();
     await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
-    const usedHeapBytes = await page.evaluate(() => {
-      const memory = (
-        performance as Performance & {
-          readonly memory?: { readonly usedJSHeapSize: number };
-        }
-      ).memory;
-      return memory?.usedJSHeapSize ?? null;
-    });
-    if (usedHeapBytes !== null) {
-      heapSamplesMb.push(usedHeapBytes / 1024 / 1024);
-    }
+    await cdpSession.send("HeapProfiler.collectGarbage");
+    const heapUsage = await cdpSession.send("Runtime.getHeapUsage");
+    heapSamplesMb.push(heapUsage.usedSize / 1024 / 1024);
   }
+  await cdpSession.detach();
 
   const profile = {
     browser: browser.version(),

@@ -12,6 +12,7 @@ test.beforeEach(async ({ page }) => {
 
 test("matches the main menu visual baseline", async ({ page }) => {
   await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "OPTIONS" })).toBeVisible();
   await expect(page).toHaveScreenshot("main-menu.png", {
     animations: "disabled",
     caret: "hide",
