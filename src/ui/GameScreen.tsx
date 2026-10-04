@@ -25,7 +25,12 @@ import { OptionsScreen } from "./OptionsScreen";
 
 interface GameTestHook {
   getState(): GameState | null;
+feat_ship_destruction_effects
+  getCreatedDestructionFragmentCount(): number;
+  getRenderedShipIds(): readonly number[];
+=======
   getWreckCount(): number;
+develop
   setInput(input: Partial<InputState>): void;
   advanceBy(seconds: number): void;
   reset(seed: number): void;
@@ -215,7 +220,14 @@ export function GameScreen({
         const state = gameStateRef.current;
         return state ? structuredClone(state) : null;
       },
+feat_ship_destruction_effects
+      getCreatedDestructionFragmentCount: () =>
+        rendererRef.current?.getCreatedDestructionFragmentCount() ?? 0,
+      getRenderedShipIds: () =>
+        rendererRef.current?.getRenderedShipIds() ?? [],
+=======
       getWreckCount: () => rendererRef.current?.getWreckCount() ?? 0,
+develop
       setInput: (input) => {
         Object.assign(inputStateRef.current, EMPTY_INPUT, input);
       },
