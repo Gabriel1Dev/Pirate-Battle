@@ -1,5 +1,49 @@
 # Architecture
 
+## Layered architecture
+
+The project uses a logical layered organization to separate user interaction,
+game orchestration, gameplay rules, and external/browser integrations. This is
+a guide to responsibilities rather than a strict Clean Architecture dependency
+rule: some orchestration and adapter calls currently meet in `GameScreen`.
+The editable overview is in [docs/architecture.drawio](./docs/architecture.drawio).
+
+### Presentation
+
+`src/App.tsx` selects and composes the screens. Components in `src/ui/`, along
+with the game HUD and controls in `GameScreen`, render the menus, options,
+ranking/history, and gameplay interface. This layer translates user actions
+into requests to the game flow and displays state; it should not own simulation
+rules.
+
+### Application coordination
+
+The application flow is currently coordinated mainly by `GameScreen` and
+`App.tsx`, rather than by a separate use-case package. `GameScreen` initializes
+and disposes the game session, advances the simulation, connects input and
+rendering, publishes HUD state, and handles match completion and result
+submission. `src/api/queries.ts` coordinates data-query behavior for ranking
+and history, while the store modules manage persisted options and match
+records.
+
+### Domain
+
+`src/game/sim/` owns the deterministic match state and gameplay rules, including
+movement, collisions, enemies, weapons, projectiles, pause transitions, and
+scoring. This layer should remain independent of React and PixiJS; rendering
+consumes simulation state rather than defining game outcomes. Shared gameplay
+tuning is defined in `src/game/config.ts`.
+
+### Infrastructure and adapters
+
+Browser and external concerns are implemented by adapters: `src/game/render/`
+draws the simulation with PixiJS, `src/game/input/` maps keyboard events to game
+input, and `src/game/audio/` handles sound. `src/api/` contains HTTP requests
+and API contracts; `src/mocks/` supplies the MSW API implementation. The
+`src/store/` modules adapt localStorage for options and match records. These
+integrations provide capabilities to the application without making the
+simulation depend on a particular UI, renderer, or network implementation.
+
 ## Game and PixiJS boundary
 
 `src/game/sim/` is deterministic TypeScript that owns match state and rules.

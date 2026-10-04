@@ -187,7 +187,6 @@
 }
 
 .text-action-button:hover,
-.menu-data-tabs button:hover,
 .pagination-controls button:hover:not(:disabled) {
   background: #284d52;
 }
@@ -207,51 +206,43 @@
   margin-top: 10px;
 }
 
-.network-demo-controls {
-  width: min(100%, 360px);
-  margin-top: 8px;
-  color: #c3d1cb;
+.menu-data-tabs button {
+  width: min(148px, calc((100vw - 100px) / 2));
+  min-height: 44px;
+  aspect-ratio: 2.72;
+  border: 0;
+  border-radius: 0;
+  padding: 6px 18px;
+  background-color: transparent;
+  background-image: url("/assets/png/default/ui/menu/button_primary_normal.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: #fff1d2;
   font-size: 0.8rem;
-  text-align: left;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
-.network-demo-controls summary {
-  width: fit-content;
-  margin: 0 auto;
-  color: #c3d1cb;
-  cursor: pointer;
+.menu-data-tabs button:hover {
+  background-color: transparent;
+  background-image: url("/assets/png/default/ui/menu/button_primary_normal.png");
+  filter: brightness(1.12);
+  transform: none;
 }
 
-.network-demo-controls summary:focus-visible,
-.network-demo-controls select:focus-visible,
-.network-demo-controls button:focus-visible {
-  outline: 2px solid #f0d792;
-  outline-offset: 3px;
-}
-
-.network-demo-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.network-demo-actions select {
-  max-width: 100%;
-  border: 1px solid #8e815f;
-  border-radius: 4px;
-  padding: 6px 8px;
-  background: #18343b;
-  color: #f2dfb0;
-  font: inherit;
+.menu-data-tabs button:active {
+  background-color: transparent;
+  background-image: url("/assets/png/default/ui/menu/button_primary_pressed.png");
 }
 
 .menu-data-tabs button[aria-pressed="true"] {
-  border-color: #f0d792;
-  background: #695130;
-  color: #fff7e5;
+  background-image: url("/assets/png/default/ui/menu/button_secondary_normal.png");
+  color: #f2dfb0;
+}
+
+.menu-data-tabs button[aria-pressed="true"]:hover {
+  filter: brightness(1.12);
 }
 
 .menu-data-panel {
