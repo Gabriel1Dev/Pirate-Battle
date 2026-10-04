@@ -25,6 +25,7 @@ import { OptionsScreen } from "./OptionsScreen";
 
 interface GameTestHook {
   getState(): GameState | null;
+  getWreckCount(): number;
   setInput(input: Partial<InputState>): void;
   advanceBy(seconds: number): void;
   reset(seed: number): void;
@@ -213,6 +214,7 @@ export function GameScreen({
         const state = gameStateRef.current;
         return state ? structuredClone(state) : null;
       },
+      getWreckCount: () => rendererRef.current?.getWreckCount() ?? 0,
       setInput: (input) => {
         Object.assign(inputStateRef.current, EMPTY_INPUT, input);
       },
@@ -385,8 +387,7 @@ export function GameScreen({
   const healthRatio = hud?.maxHp
     ? Math.max(0, Math.min(1, hud.hp / hud.maxHp))
     : 0;
-  const [firstDamageStage, secondDamageStage] =
-    config.visual.damageStages;
+  const [firstDamageStage, secondDamageStage] = config.visual.damageStages;
   const healthFillPath =
     healthRatio <= secondDamageStage
       ? HEALTH_FILL_PATHS.red
@@ -504,7 +505,9 @@ export function GameScreen({
         {!loadError && !loaded && (
           <div className="arena-loading" aria-live="polite">
             <div className="arena-loading-card">
-              <span>Loading battle assets… {Math.round(assetProgress * 100)}%</span>
+              <span>
+                Loading battle assets… {Math.round(assetProgress * 100)}%
+              </span>
               <progress
                 aria-label="Battle asset loading progress"
                 max={1}
@@ -525,9 +528,7 @@ export function GameScreen({
                 {isFinished ? "Battle complete" : "Ready when you are"}
               </span>
               <h2 id="match-overlay-title">
-                {isFinished
-                  ? "VOYAGE COMPLETE"
-                  : "PAUSED"}
+                {isFinished ? "VOYAGE COMPLETE" : "PAUSED"}
               </h2>
               {isFinished ? (
                 <>
