@@ -38,6 +38,11 @@ export function resolveShipCollisions(state: GameState): void {
   );
 
   if (state.player.hp === 0) {
+    state.events.push({
+      type: "explosion",
+      pos: { ...state.player.pos },
+      kind: "player",
+    });
     state.status = "ended";
     state.endReason = "death";
   }

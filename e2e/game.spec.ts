@@ -48,6 +48,7 @@ declare global {
   interface Window {
     __game?: {
       getState(): BrowserGameState | null;
+      getWreckCount(): number;
       setInput(input: {
         forward?: boolean;
         turnLeft?: boolean;
@@ -260,6 +261,7 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
       cooldownShots,
       score: state.score,
       destroyed: state.stats.enemiesDestroyed,
+      wrecks: hook.getWreckCount(),
       damageTaken: state.stats.damageTaken,
       shotsFired: state.stats.shotsFired,
     };
@@ -270,6 +272,7 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
   expect(result.shotsFired).toBeGreaterThan(0);
   expect(result.damageTaken).toBeGreaterThan(0);
   expect(result.destroyed).toBeGreaterThan(0);
+  expect(result.wrecks).toBeGreaterThan(0);
   expect(result.score).toBe(result.destroyed);
 });
 
@@ -415,6 +418,7 @@ test("ends and saves the match when the player is destroyed", async ({
   expect(endedState?.status).toBe("ended");
   expect(endedState?.endReason).toBe("death");
   expect(endedState?.player.hp).toBe(0);
+  expect(await page.evaluate(() => window.__game?.getWreckCount())).toBe(1);
   expect(endedState?.elapsedSec).toBeLessThan(
     endedState?.config.match.durationSec ?? 0,
   );
