@@ -48,6 +48,8 @@ declare global {
   interface Window {
     __game?: {
       getState(): BrowserGameState | null;
+      getCreatedDestructionFragmentCount(): number;
+      getRenderedShipIds(): readonly number[];
       setInput(input: {
         forward?: boolean;
         turnLeft?: boolean;
@@ -415,6 +417,14 @@ test("ends and saves the match when the player is destroyed", async ({
   expect(endedState?.status).toBe("ended");
   expect(endedState?.endReason).toBe("death");
   expect(endedState?.player.hp).toBe(0);
+  expect(
+    await page.evaluate(
+      () => window.__game?.getCreatedDestructionFragmentCount() ?? 0,
+    ),
+  ).toBeGreaterThanOrEqual(7);
+  expect(
+    await page.evaluate(() => window.__game?.getRenderedShipIds()),
+  ).not.toContain(1);
   expect(endedState?.elapsedSec).toBeLessThan(
     endedState?.config.match.durationSec ?? 0,
   );

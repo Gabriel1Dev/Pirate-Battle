@@ -66,7 +66,7 @@ Implemente pausa manual e automática ao perder o foco ou ocultar a aba. Durante
 
 ### Animações e feedback
 
-Implemente efeitos de disparo, explosão de destruição e deterioração visual dos navios conforme a vida restante. Ataques, impactos e dano devem ter feedback perceptível, mantendo a leitura da arena.
+Implemente efeitos de disparo, explosão de destruição e deterioração visual dos navios conforme a vida restante. A destruição combina explosão sobre o sprite, fragmentos de casco, vela, madeira e canhão que se espalham, e um bote com tripulantes como destroço temporário. Ataques, impactos e dano devem ter feedback perceptível, mantendo a leitura da arena.
 
 ## 3. Telas e configurações
 
