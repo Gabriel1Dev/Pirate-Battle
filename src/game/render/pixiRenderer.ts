@@ -9,6 +9,7 @@ import {
   TilingSprite,
 } from "pixi.js";
 import type { GameConfig, IslandConfig } from "../config";
+import { getIslandOutline, getIslandShapeScale } from "../islandShape";
 import type { GameEvent, GameState, Ship } from "../sim/types";
 
 const SHIP_TEXTURE_PATHS = {
@@ -182,22 +183,15 @@ function createIslandView(
   const islandView = new Container();
   islandView.position.set(island.x - center, island.y - center);
 
-  const islandSize = island.radius * 2.9;
+  const shape = getIslandShapeScale(index);
+  const islandSize = island.radius * 2.75;
   for (const [ringIndex, ring] of [1.2, 1.1].entries()) {
     const shoreline = new Graphics();
-    const points: number[] = [];
-    for (let point = 0; point < 48; point += 1) {
-      const angle = (point / 48) * Math.PI * 2;
-      const variation =
-        1 +
-        Math.sin(angle * 3 + index * 0.7) * 0.035 +
-        Math.cos(angle * 5 - index) * 0.025;
-      const radius = (islandSize / 2) * ring * variation;
-      points.push(
-        center + Math.cos(angle) * radius,
-        center + Math.sin(angle) * radius,
-      );
-    }
+    const points = getIslandOutline(
+      island.radius,
+      index,
+      (islandSize / (2 * island.radius)) * ring,
+    ).flatMap((point) => [center + point.x, center + point.y]);
     shoreline.poly(points).fill({
       color: ringIndex === 0 ? 0x76dce5 : 0xb7f0df,
       alpha: ringIndex === 0 ? 0.18 : 0.2,
@@ -208,8 +202,8 @@ function createIslandView(
   const ground = new Sprite(textures.base);
   ground.anchor.set(0.5);
   ground.position.set(center, center);
-  ground.width = islandSize;
-  ground.height = islandSize;
+  ground.width = islandSize * shape.scaleX;
+  ground.height = islandSize * shape.scaleY;
   islandView.addChild(ground);
 
   const details = ISLAND_DETAILS[index % ISLAND_DETAILS.length];
@@ -334,6 +328,53 @@ function createIslandTexture(atlasTexture: Texture): Texture {
     frame.width,
     frame.height,
   );
+
+  const softenedTexture = document.createElement("canvas");
+  softenedTexture.width = frame.width;
+  softenedTexture.height = frame.height;
+  const softenedContext = softenedTexture.getContext("2d");
+  if (!softenedContext) {
+    throw new Error("Unable to blend the island texture seams.");
+  }
+  softenedContext.filter = "blur(16px)";
+  softenedContext.drawImage(canvas, 0, 0);
+  softenedContext.filter = "none";
+
+  for (const axis of ["x", "y"] as const) {
+    const seamMask = document.createElement("canvas");
+    seamMask.width = frame.width;
+    seamMask.height = frame.height;
+    const maskContext = seamMask.getContext("2d");
+    if (!maskContext) {
+      throw new Error("Unable to prepare the island seam mask.");
+    }
+
+    const gradient =
+      axis === "x"
+        ? maskContext.createLinearGradient(0, 0, frame.width, 0)
+        : maskContext.createLinearGradient(0, 0, 0, frame.height);
+    const seamPosition = 0.5;
+    const feather = 28 / frame.width;
+    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(seamPosition - feather, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(seamPosition, "rgba(0, 0, 0, 0.9)");
+    gradient.addColorStop(seamPosition + feather, "rgba(0, 0, 0, 0)");
+    gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+    maskContext.fillStyle = gradient;
+    maskContext.fillRect(0, 0, frame.width, frame.height);
+
+    const seamBlend = document.createElement("canvas");
+    seamBlend.width = frame.width;
+    seamBlend.height = frame.height;
+    const blendContext = seamBlend.getContext("2d");
+    if (!blendContext) {
+      throw new Error("Unable to blend the island texture seams.");
+    }
+    blendContext.drawImage(softenedTexture, 0, 0);
+    blendContext.globalCompositeOperation = "destination-in";
+    blendContext.drawImage(seamMask, 0, 0);
+    context.drawImage(seamBlend, 0, 0);
+  }
 
   return Texture.from(canvas);
 }

@@ -128,6 +128,8 @@ async function applyReadScenario(
 }
 
 export const handlers = [
+  http.get("/api/health", () => HttpResponse.json({ status: "ok" })),
+
   http.get("/api/ranking", async ({ request }) => {
     const url = new URL(request.url);
     const pagination = parsePagination(url);
