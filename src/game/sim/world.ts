@@ -54,6 +54,10 @@ export function createInitialGameState(
     player,
     enemies: [],
     projectiles: [],
+    pendingBroadsideSalvos: {
+      left: null,
+      right: null,
+    },
     islands,
     spawnTimerSec: configSnapshot.match.spawnIntervalSec,
     nextId: FIRST_ENTITY_ID,
