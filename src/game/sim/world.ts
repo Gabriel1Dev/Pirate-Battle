@@ -1,4 +1,5 @@
 import { DEFAULT_CONFIG, type GameConfig } from "../config";
+import { getIslandOutline } from "../islandShape";
 import type { GameState, Island, Ship } from "./types";
 
 const PLAYER_ID = 1;
@@ -28,10 +29,19 @@ export function createInitialGameState(
       right: 0,
     },
   };
-  const islands: Island[] = configSnapshot.arena.islands.map((island) => ({
-    pos: { x: island.x, y: island.y },
-    radius: island.radius,
-  }));
+  const islands: Island[] = configSnapshot.arena.islands.map(
+    (island, index) => {
+      const pos = { x: island.x, y: island.y };
+      return {
+        pos,
+        radius: island.radius,
+        outline: getIslandOutline(island.radius, index).map((point) => ({
+          x: point.x + pos.x,
+          y: point.y + pos.y,
+        })),
+      };
+    },
+  );
 
   return {
     seed: normalizedSeed,

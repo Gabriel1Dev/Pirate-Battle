@@ -594,12 +594,11 @@ export default function App(): React.JSX.Element {
             {storedMatches.error}
           </p>
         )}
-        {storedMatches.matches.matches.length > 0 && (
+        {pendingMatches.length > 0 && (
           <p className="pending-match-status" role="status">
             {pendingMatches.length} match
             {pendingMatches.length === 1 ? "" : "es"} awaiting upload ·{" "}
-            {storedMatches.matches.matches.length - pendingMatches.length} saved
-            remotely.
+            saved on this device and will be retried.
           </p>
         )}
         {pendingMatches.length > 0 && (

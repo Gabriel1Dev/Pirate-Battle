@@ -207,6 +207,7 @@
 
 .menu-data-tabs button {
   display: grid;
+  width: min(148px, calc((100vw - 100px) / 2));
   min-width: min(38vw, 150px);
   min-height: 48px;
   place-items: center;

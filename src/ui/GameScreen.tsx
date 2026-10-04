@@ -28,6 +28,7 @@ interface GameTestHook {
   getCameraTransform(): { readonly x: number; readonly y: number; readonly scale: number } | null;
   getCreatedDestructionFragmentCount(): number;
   getRenderedShipIds(): readonly number[];
+  getWreckCount(): number;
   setInput(input: Partial<InputState>): void;
   advanceBy(seconds: number): void;
   reset(seed: number): void;
@@ -140,6 +141,7 @@ export function GameScreen({
   const [loaded, setLoaded] = useState(false);
   const [assetProgress, setAssetProgress] = useState(0);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsSavedNotice, setOptionsSavedNotice] = useState(false);
   const [optionsSaveError, setOptionsSaveError] = useState<string | null>(null);
   const [matchSaveError, setMatchSaveError] = useState<string | null>(null);
   const [matchSaved, setMatchSaved] = useState(false);
@@ -222,6 +224,7 @@ export function GameScreen({
         rendererRef.current?.getCreatedDestructionFragmentCount() ?? 0,
       getRenderedShipIds: () =>
         rendererRef.current?.getRenderedShipIds() ?? [],
+      getWreckCount: () => rendererRef.current?.getWreckCount() ?? 0,
       setInput: (input) => {
         Object.assign(inputStateRef.current, EMPTY_INPUT, input);
       },
@@ -394,8 +397,7 @@ export function GameScreen({
   const healthRatio = hud?.maxHp
     ? Math.max(0, Math.min(1, hud.hp / hud.maxHp))
     : 0;
-  const [firstDamageStage, secondDamageStage] =
-    config.visual.damageStages;
+  const [firstDamageStage, secondDamageStage] = config.visual.damageStages;
   const healthFillPath =
     healthRatio <= secondDamageStage
       ? HEALTH_FILL_PATHS.red
@@ -407,6 +409,7 @@ export function GameScreen({
       onSaveOptions(nextOptions);
       setOptionsSaveError(null);
       setOptionsOpen(false);
+      setOptionsSavedNotice(true);
     } catch (error: unknown) {
       setOptionsSaveError(
         error instanceof Error
@@ -513,7 +516,9 @@ export function GameScreen({
         {!loadError && !loaded && (
           <div className="arena-loading" aria-live="polite">
             <div className="arena-loading-card">
-              <span>Loading battle assets… {Math.round(assetProgress * 100)}%</span>
+              <span>
+                Loading battle assets… {Math.round(assetProgress * 100)}%
+              </span>
               <progress
                 aria-label="Battle asset loading progress"
                 max={1}
@@ -522,7 +527,7 @@ export function GameScreen({
             </div>
           </div>
         )}
-        {(isPaused || isFinished) && !optionsOpen && (
+        {(isPaused || isFinished) && !optionsOpen && !optionsSavedNotice && (
           <div
             aria-labelledby="match-overlay-title"
             aria-modal="true"
@@ -534,9 +539,7 @@ export function GameScreen({
                 {isFinished ? "Battle complete" : "Ready when you are"}
               </span>
               <h2 id="match-overlay-title">
-                {isFinished
-                  ? "VOYAGE COMPLETE"
-                  : "PAUSED"}
+                {isFinished ? "VOYAGE COMPLETE" : "PAUSED"}
               </h2>
               {isFinished ? (
                 <>
@@ -601,6 +604,42 @@ export function GameScreen({
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {optionsSavedNotice && (
+          <div
+            aria-labelledby="options-saved-title"
+            aria-modal="true"
+            className="arena-overlay"
+            role="dialog"
+          >
+            <div className="overlay-card">
+              <span className="game-kicker">Options saved</span>
+              <h2 id="options-saved-title">NEXT VOYAGE</h2>
+              <p>
+                These settings will take effect in your next match. Would you
+                like to return to the main menu or continue playing?
+              </p>
+              <div className="overlay-actions">
+                <button
+                  className="primary-button menu-button"
+                  onClick={() => {
+                    setOptionsSavedNotice(false);
+                    togglePause();
+                  }}
+                  type="button"
+                >
+                  CONTINUE PLAYING
+                </button>
+                <button
+                  className="primary-button menu-button"
+                  onClick={onExit}
+                  type="button"
+                >
+                  MAIN MENU
+                </button>
+              </div>
             </div>
           </div>
         )}

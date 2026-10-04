@@ -79,9 +79,9 @@ export const DEFAULT_CONFIG: GameConfig = {
     playerStart: { x: 160, y: 360 },
     playerStartAngle: 0,
     islands: [
-      { x: 420, y: 360, radius: 70 },
-      { x: 880, y: 210, radius: 60 },
-      { x: 900, y: 530, radius: 80 },
+      { x: 420, y: 360, radius: 77 },
+      { x: 880, y: 210, radius: 66 },
+      { x: 900, y: 530, radius: 88 },
     ],
   },
   player: {
