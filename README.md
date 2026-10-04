@@ -236,6 +236,7 @@ npm run build
 npx tsc -b --pretty false
 npm run lint
 npm run test:e2e
+npm run test:profile
 npm run preview
 ```
 
@@ -246,6 +247,12 @@ Chromium desktop and a mobile Chromium profile and writes the HTML report to
 `playwright-report/`; open it with `npm run test:e2e:report`. To intentionally
 replace screenshot baselines after reviewing a visual change, use
 `npm run test:e2e:update`.
+
+`npm run test:profile` creates a separate optimized profiling build, serves it
+with Vite Preview, and records frame pacing, three-minute match entity counts,
+and heap readings across twenty start/exit cycles. The profile-only test hook is
+not included in the normal production build. Profiling output and the written
+measurements are documented in `PERFORMANCE.md`.
 
 ### Implemented gameplay
 
@@ -287,28 +294,31 @@ locally in the browser.
 Playwright currently covers options persistence, deterministic movement and
 combat/spawning, island and arena-boundary blocking, match end on player death,
 manual and focus-loss pause, fresh-match behavior, mobile touch controls,
-pending upload recovery, timeout-after-save idempotency, and ranking pagination
-plus empty/failure scenarios. Visual baselines cover the menu, paused arena, and
+asset load retry, combat damage/cooldowns/scoring, end by timer, abandoned
+matches, result persistence across refresh, pending upload recovery,
+timeout-after-save idempotency, delayed ranking responses, and pagination plus
+empty/failure scenarios. Visual baselines cover the menu, paused arena, and
 completed result on both viewports; they are stored under
 `e2e/__screenshots__/`. Test traces and failure artifacts are written under the
-ignored `test-results/` directory. The latest validation passed the production
-build and 25 Playwright tests; the desktop-only run skips the mobile touch test.
+ignored `test-results/` directory. The latest validation results and the
+profiling conditions are recorded in `TEST_REPORT.md` and `PERFORMANCE.md`.
 The production preview also confirmed that MSW starts, a completed match is
 submitted once, and its record appears in history and ranking.
 
 ### Deploy to Vercel
 
 The repository includes `vercel.json` with the Vite build command and `dist`
-output directory. Import the GitHub repository in Vercel and deploy with the
-Vite framework preset. No environment variables or external API credentials are
-required: ranking and history are served by MSW in the production build. After
-deployment, open the public URL, confirm the Network demo selector works, and
-record the URL here for the challenge submission.
+output directory. The public deployment is
+https://pirate-battle-navy.vercel.app/. No environment variables or external API
+credentials are required: ranking and history are served by MSW in the
+production build. After pushing changes, verify the updated deployment at that
+URL.
 
 In development, `window.__game` can read a copied simulation state, set the
 current input, advance a deterministic amount of simulation time, reset with a
-seed, or switch back to the real-time clock. This hook is omitted from
-production builds.
+seed, or switch back to the real-time clock. The hook is also enabled in the
+separate performance profile build for reproducible entity counts; it is
+omitted from normal production builds.
 
 ## Project architecture
 

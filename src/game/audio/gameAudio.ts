@@ -47,6 +47,12 @@ function randomSound(sounds: readonly string[]): string {
   return sounds[Math.floor(Math.random() * sounds.length)];
 }
 
+function releaseSound(audio: HTMLAudioElement): void {
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+}
+
 export function playUiSound(name: UiSound): void {
   const volume = name === "ui_hover" ? 0.22 : 0.45;
   playSound(name, volume);
@@ -188,11 +194,12 @@ export class GameAudio {
     this.started = false;
     this.finished = true;
     for (const audio of this.activeSounds) {
-      audio.pause();
-      audio.currentTime = 0;
+      releaseSound(audio);
     }
     this.activeSounds.clear();
-    this.pauseLoops();
+    for (const audio of this.loops.values()) {
+      releaseSound(audio);
+    }
     this.loops.clear();
   }
 

@@ -11,7 +11,7 @@
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:e2e:report": "playwright show-report",
-    "test:profile": "npm run build -- --mode performance && playwright test --config=playwright.performance.config.ts e2e/performance.spec.ts"
+    "test:profile": "npm run build -- --mode performance --outDir dist-performance && playwright test --config=playwright.performance.config.ts e2e/performance.spec.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",

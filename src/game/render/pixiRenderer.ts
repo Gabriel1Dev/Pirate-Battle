@@ -3,6 +3,7 @@ import {
   Assets,
   Container,
   Graphics,
+  Rectangle,
   Sprite,
   Texture,
   TilingSprite,
@@ -32,10 +33,15 @@ const HEALTH_TEXTURE_PATHS = {
 } as const;
 
 const TILE_TEXTURE_PATHS = {
+  islandSheet: "/assets/tilesheet/tiles_sheet.png",
   water: "/assets/png/default/tiles/tile_73.png",
   foliage: "/assets/png/default/tiles/tile_70.png",
+  foliageLarge: "/assets/png/default/tiles/tile_71.png",
   rock: "/assets/png/default/tiles/tile_50.png",
 } as const;
+
+const ISLAND_GRASS_FRAME = new Rectangle(384, 128, 64, 64);
+const ISLAND_SAND_FRAME = new Rectangle(0, 0, 192, 192);
 
 const EFFECT_TEXTURE_PATHS = {
   fire: [
@@ -97,7 +103,9 @@ interface HealthTextures {
 }
 
 interface IslandTextures {
+  readonly base: Texture;
   readonly foliage: Texture;
+  readonly foliageLarge: Texture;
   readonly rock: Texture;
 }
 
@@ -118,16 +126,19 @@ interface EffectView {
 
 const ISLAND_DETAILS: readonly (readonly IslandDetail[])[] = [
   [
-    { texture: "foliage", x: -0.2, y: -0.1, size: 0.78 },
-    { texture: "rock", x: -0.35, y: 0.34, size: 0.3 },
+    { texture: "foliage", x: -0.2, y: -0.1, size: 0.42 },
+    { texture: "foliageLarge", x: 0.23, y: 0.24, size: 0.35 },
+    { texture: "rock", x: -0.35, y: 0.34, size: 0.23 },
   ],
   [
-    { texture: "foliage", x: 0.14, y: -0.18, size: 0.74 },
-    { texture: "rock", x: 0.33, y: 0.34, size: 0.3 },
+    { texture: "foliage", x: 0.14, y: -0.18, size: 0.42 },
+    { texture: "foliageLarge", x: -0.25, y: 0.25, size: 0.33 },
+    { texture: "rock", x: 0.33, y: 0.34, size: 0.23 },
   ],
   [
-    { texture: "foliage", x: -0.23, y: 0.05, size: 0.72 },
-    { texture: "rock", x: -0.38, y: 0.36, size: 0.28 },
+    { texture: "foliage", x: -0.23, y: 0.05, size: 0.42 },
+    { texture: "foliageLarge", x: 0.22, y: 0.3, size: 0.34 },
+    { texture: "rock", x: -0.38, y: 0.36, size: 0.22 },
   ],
 ];
 
@@ -146,21 +157,12 @@ function createIslandView(
   const islandView = new Container();
   islandView.position.set(island.x - center, island.y - center);
 
-  const sand = new Graphics()
-    .circle(center, center, island.radius)
-    .fill({ color: 0xf2d18a });
-  const grassRadius = island.radius * 0.52;
-  const grass = new Graphics()
-    .circle(center, center, grassRadius)
-    .fill({ color: 0x43844c });
-  islandView.addChild(sand, grass);
-
-  const coastline = new Graphics()
-    .circle(center, center, island.radius - 2)
-    .stroke({ color: 0xf0d18a, width: 4, alpha: 0.8 })
-    .circle(center, center, grassRadius)
-    .stroke({ color: 0x79633c, width: 2, alpha: 0.45 });
-  islandView.addChild(coastline);
+  const ground = new Sprite(textures.base);
+  ground.anchor.set(0.5);
+  ground.position.set(center, center);
+  ground.width = island.radius * 2.35;
+  ground.height = island.radius * 2.35;
+  islandView.addChild(ground);
 
   const details = ISLAND_DETAILS[index % ISLAND_DETAILS.length];
   for (const detail of details) {
@@ -177,6 +179,54 @@ function createIslandView(
   }
 
   return islandView;
+}
+
+function createIslandTexture(atlasTexture: Texture): Texture {
+  const sandFrame = ISLAND_SAND_FRAME;
+  const grassFrame = ISLAND_GRASS_FRAME;
+  const size = sandFrame.width;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Unable to prepare the island grass texture.");
+  }
+
+  context.drawImage(
+    atlasTexture.source.resource,
+    sandFrame.x,
+    sandFrame.y,
+    sandFrame.width,
+    sandFrame.height,
+    0,
+    0,
+    size,
+    size,
+  );
+  context.beginPath();
+  context.moveTo(96, 53);
+  context.bezierCurveTo(120, 49, 143, 66, 136, 88);
+  context.bezierCurveTo(150, 108, 127, 132, 109, 135);
+  context.bezierCurveTo(95, 151, 75, 136, 63, 132);
+  context.bezierCurveTo(42, 128, 50, 103, 48, 87);
+  context.bezierCurveTo(46, 65, 73, 51, 96, 53);
+  context.closePath();
+  context.clip();
+  context.drawImage(
+    atlasTexture.source.resource,
+    grassFrame.x,
+    grassFrame.y,
+    grassFrame.width,
+    grassFrame.height,
+    47,
+    51,
+    100,
+    100,
+  );
+
+  return Texture.from(canvas);
 }
 
 function createDamagedShipTexture(
@@ -298,7 +348,9 @@ export async function initializePixiRenderer(
     enemyGreenTexture,
     enemyRedTexture,
     waterTexture,
+    islandSheetTexture,
     foliageTexture,
+    foliageLargeTexture,
     rockTexture,
     fireTextureOne,
     fireTextureTwo,
@@ -320,7 +372,9 @@ export async function initializePixiRenderer(
     loadTexture(HEALTH_TEXTURE_PATHS.enemyGreen),
     loadTexture(HEALTH_TEXTURE_PATHS.enemyRed),
     loadTexture(TILE_TEXTURE_PATHS.water),
+    loadTexture(TILE_TEXTURE_PATHS.islandSheet),
     loadTexture(TILE_TEXTURE_PATHS.foliage),
+    loadTexture(TILE_TEXTURE_PATHS.foliageLarge),
     loadTexture(TILE_TEXTURE_PATHS.rock),
     ...EFFECT_TEXTURE_PATHS.fire.map(loadTexture),
     ...EFFECT_TEXTURE_PATHS.explosion.map(loadTexture),
@@ -329,6 +383,12 @@ export async function initializePixiRenderer(
     player: createDamagedShipTexture(playerTexture, damagedPlayerSailTexture),
     chaser: createDamagedShipTexture(chaserTexture, damagedChaserSailTexture),
     shooter: createDamagedShipTexture(shooterTexture, damagedShooterSailTexture),
+  };
+  const islandTextures: IslandTextures = {
+    base: createIslandTexture(islandSheetTexture),
+    foliage: foliageTexture,
+    foliageLarge: foliageLargeTexture,
+    rock: rockTexture,
   };
   const textureByKind = {
     player: playerTexture,
@@ -374,10 +434,6 @@ export async function initializePixiRenderer(
   application.stage.addChild(world);
   host.appendChild(application.canvas);
 
-  const islandTextures: IslandTextures = {
-    foliage: foliageTexture,
-    rock: rockTexture,
-  };
   for (const [index, island] of config.arena.islands.entries()) {
     islandLayer.addChild(createIslandView(island, index, islandTextures));
   }
@@ -566,6 +622,7 @@ export async function initializePixiRenderer(
       Object.values(damagedTextureByKind).forEach((texture) =>
         texture.destroy(true),
       );
+      islandTextures.base.destroy(true);
       shipViews.clear();
     },
   };

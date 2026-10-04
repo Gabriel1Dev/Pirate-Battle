@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 interface BrowserGameState {
   readonly status: string;
@@ -72,6 +72,25 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto("/");
 });
+
+async function openNetworkScenario(
+  page: Page,
+  scenario: string,
+): Promise<void> {
+  await page.goto(`/?scenario=${encodeURIComponent(scenario)}`);
+}
+
+async function setNetworkScenario(page: Page, scenario: string): Promise<void> {
+  await page.evaluate((nextScenario) => {
+    window.localStorage.setItem(
+      "pirate-battle.network-scenario.v1",
+      nextScenario,
+    );
+    const url = new URL(window.location.href);
+    url.searchParams.set("scenario", nextScenario);
+    window.history.replaceState(null, "", url);
+  }, scenario);
+}
 
 test("saves validated match options across a reload", async ({ page }) => {
   await page.getByRole("button", { name: "OPTIONS" }).click();
@@ -334,14 +353,13 @@ test("freezes the simulation during pause and restarts with fresh state", async 
   await page.getByRole("button", { name: "PLAY" }).click();
   await expect(page.locator("canvas")).toBeVisible();
   await page.waitForFunction(() => window.__game?.getState() !== null);
+  await page.evaluate(() => window.__game?.reset(124));
   const restarted = await page.evaluate(() => window.__game?.getState());
   expect(restarted?.score).toBe(0);
   expect(restarted?.enemies).toHaveLength(0);
 });
 
-test("pauses on window blur and requires an explicit resume action", async ({
-  page,
-}) => {
+test("returns to the menu when the game window loses focus", async ({ page }) => {
   await page.getByRole("button", { name: "PLAY" }).click();
   await expect(page.locator("canvas")).toBeVisible();
   await page.waitForFunction(() => window.__game?.getState() !== null);
@@ -351,19 +369,31 @@ test("pauses on window blur and requires an explicit resume action", async ({
     window.dispatchEvent(new Event("blur"));
   });
 
-  await expect(page.getByRole("heading", { name: "PAUSED" })).toBeVisible();
-  const pausedState = await page.evaluate(() => window.__game?.getState());
-  await page.evaluate(() => window.__game?.advanceBy(2));
-  await expect.poll(
-    () => page.evaluate(() => window.__game?.getState()?.elapsedSec),
-  ).toBe(pausedState?.elapsedSec);
+  await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(0);
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("pirate-battle.matches.v1"),
+    ),
+  ).toBeNull();
+});
 
-  await page.getByRole("button", { name: "RESUME", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "PAUSED" })).toHaveCount(0);
-  await page.evaluate(() => window.__game?.advanceBy(1));
-  const resumedState = await page.evaluate(() => window.__game?.getState());
-  expect(resumedState?.status).toBe("running");
-  expect(resumedState?.player.pos).toEqual(pausedState?.player.pos);
+test("returns to the menu when the game page becomes hidden", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "PLAY" }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.waitForFunction(() => window.__game?.getState() !== null);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
+  await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(0);
 });
 
 test("ends and saves the match when the player is destroyed", async ({
@@ -538,7 +568,7 @@ test("drives movement and firing with mobile touch controls", async ({
 test("keeps failed match uploads pending and retries them without duplicates", async ({
   page,
 }) => {
-  await page.getByLabel("Network demo").selectOption("offline-on-finish");
+  await openNetworkScenario(page, "offline-on-finish");
   await page.getByRole("button", { name: "PLAY" }).click();
   await expect(page.locator("canvas")).toBeVisible();
   await page.waitForFunction(() => window.__game?.getState() !== null);
@@ -566,23 +596,28 @@ test("keeps failed match uploads pending and retries them without duplicates", a
   await expect(
     page.getByRole("button", { name: /Retry upload/ }),
   ).toBeVisible();
-  await page.getByLabel("Network demo").selectOption("success");
-  await page.getByRole("button", { name: /Retry upload/ }).click();
-  await expect.poll(async () =>
-    page.evaluate(() => {
-      const stored = window.localStorage.getItem("pirate-battle.matches.v1");
-      if (!stored) {
-        return null;
-      }
-      const parsed = JSON.parse(stored) as {
-        readonly matches: readonly {
-          readonly matchId: string;
-          readonly submissionStatus: string;
-        }[];
-      };
-      return parsed.matches[0]?.submissionStatus;
-    }),
-  ).toBe("confirmed");
+  await setNetworkScenario(page, "success");
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const stored = window.localStorage.getItem(
+            "pirate-battle.matches.v1",
+          );
+          if (!stored) {
+            return null;
+          }
+          const parsed = JSON.parse(stored) as {
+            readonly matches: readonly {
+              readonly matchId: string;
+              readonly submissionStatus: string;
+            }[];
+          };
+          return parsed.matches[0]?.submissionStatus;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe("confirmed");
 
   const matchCount = await page.evaluate((matchId) => {
     const stored = window.localStorage.getItem("pirate-battle.matches.v1");
@@ -597,7 +632,23 @@ test("keeps failed match uploads pending and retries them without duplicates", a
   expect(matchCount).toBe(1);
 
   await page.getByRole("button", { name: "Match History" }).click();
-  await expect(page.getByText(/0 points · \d+s/)).toBeVisible();
+  const historyEntry = page.locator(".history-rows li");
+  await expect(historyEntry).toBeVisible();
+  await expect(historyEntry.locator(".data-points")).toHaveText("0");
+  await expect(historyEntry.locator(".data-duration")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "MAIN MENU", exact: true }),
+  ).toBeVisible({ timeout: 15_000 });
+  await openNetworkScenario(page, "history-fail");
+  await page.getByRole("button", { name: "Match History" }).click();
+  await expect(
+    page.getByText("Match history could not be loaded."),
+  ).toBeVisible({ timeout: 15_000 });
+  await openNetworkScenario(page, "empty");
+  await page.getByRole("button", { name: "Match History" }).click();
+  await expect(
+    page.getByText("No completed matches in your history."),
+  ).toBeVisible({ timeout: 15_000 });
 });
 
 test("shows paginated ranking and selectable empty and failure scenarios", async ({
@@ -609,23 +660,52 @@ test("shows paginated ranking and selectable empty and failure scenarios", async
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Page 2 of 2")).toBeVisible();
 
-  await page.getByLabel("Network demo").selectOption("empty");
+  await openNetworkScenario(page, "empty");
+  await page.getByRole("button", { name: "Ranking" }).click();
   await expect(page.getByText("No ranking entries yet.")).toBeVisible();
-  await page.getByLabel("Network demo").selectOption("ranking-fail");
+  await openNetworkScenario(page, "ranking-fail");
+  await page.getByRole("button", { name: "Ranking" }).click();
   await expect(
     page.getByText("Ranking could not be loaded."),
   ).toBeVisible({ timeout: 15_000 });
+  await openNetworkScenario(page, "success");
+  await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+});
+
+test("selects network scenarios and resets mock data from the menu", async ({
+  page,
+}) => {
+  const scenarioDisclosure = page.getByText("Network demo: success");
+  await scenarioDisclosure.click();
+  await page.getByLabel("Scenario").selectOption("empty");
+  await expect(page).toHaveURL(/scenario=empty/);
+  await expect(page.getByText("Network demo: empty")).toBeVisible();
+
+  await page.getByRole("button", { name: "Ranking" }).click();
+  await expect(page.getByText("No ranking entries yet.")).toBeVisible();
+  await page.getByRole("button", { name: "MAIN MENU", exact: true }).click();
+  await page.getByText("Network demo: empty").click();
   await page.getByRole("button", { name: "Reset mock data" }).click();
-  await expect(page.getByLabel("Network demo")).toHaveValue("success");
+
+  await expect(page.getByText("Network demo: success")).toBeVisible();
+  await expect(page).not.toHaveURL(/scenario=/);
+  const resetStorage = await page.evaluate(() => ({
+    scenario: window.localStorage.getItem("pirate-battle.network-scenario.v1"),
+    matches: window.localStorage.getItem("pirate-battle.mock-matches.v1"),
+  }));
+  expect(resetStorage).toEqual({ scenario: null, matches: null });
+
+  await page.getByRole("button", { name: "Ranking" }).click();
+  await expect(page.getByText("Captain Rowan")).toBeVisible();
 });
 
 test("keeps the newest ranking page selected when an older response arrives late", async ({
   page,
 }) => {
+  await openNetworkScenario(page, "variable-latency");
   await page.getByRole("button", { name: "Ranking" }).click();
   await expect(page.getByText("Captain Rowan")).toBeVisible();
 
-  await page.getByLabel("Network demo").selectOption("variable-latency");
   await page.waitForTimeout(100);
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Page 2 of 2")).toBeVisible();
@@ -639,7 +719,7 @@ test("keeps the newest ranking page selected when an older response arrives late
 test("upserts a match once when the server saves before timing out", async ({
   page,
 }) => {
-  await page.getByLabel("Network demo").selectOption("timeout-after-save");
+  await openNetworkScenario(page, "timeout-after-save");
   await page.getByRole("button", { name: "PLAY" }).click();
   await expect(page.locator("canvas")).toBeVisible();
   await page.waitForFunction(() => window.__game?.getState() !== null);
