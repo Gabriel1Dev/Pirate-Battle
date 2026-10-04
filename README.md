@@ -45,12 +45,15 @@ measurements are documented in `PERFORMANCE.md`.
   survive until the match timer expires.
 
 The current build includes the seeded simulation, fixed-step clock, enemy
-spawning and combat, circular island obstacles, PixiJS rendering, ship health
-bars, combat effects, a throttled HUD, and a persisted Options screen. Use
+spawning and combat, irregular island coastlines with matching polygonal ship
+and projectile collisions, PixiJS rendering, ship health bars, combat effects,
+a throttled HUD, and a persisted Options screen. Use
 **Options** from the main menu to set the game session time (60–180 whole
 seconds) and enemy spawn time (1–10 whole seconds). Saved options are restored
 after refresh and copied into a configuration snapshot when a new match starts;
-changes affect future matches only. Defaults are 90 seconds per match and 3
+changes affect future matches only. Saving options during a match prompts you
+to continue the current match or return to the main menu; the updated settings
+are used when the next match starts. Defaults are 90 seconds per match and 3
 seconds between spawns. Game tuning and limits are defined in
 `src/game/config.ts`.
 
@@ -59,26 +62,28 @@ active duration, end reason, completion time, and full config snapshot are
 saved to localStorage as a pending submission before upload. Axios submits the
 record through TanStack Query to the MSW-backed API, which upserts by match ID;
 confirmed records are marked locally and pending records are retried after
-refresh or with the menu retry action. API errors never block gameplay.
+refresh or with the menu retry action. Submission errors never discard match
+data. Before showing the main menu, the app waits for MSW to control the page
+and verifies its health endpoint; if that check fails, the game stays
+unavailable instead of allowing requests to fall through to a 404.
 
 Use **Ranking** and **Match History** from the main menu to browse paginated
 API results. Ranking entries are filtered to the exact current match config and
 ordered by score descending, duration ascending, completion date ascending,
-then match ID. Fixture players populate the ranking. The **Network demo**
-selector in the menu exposes success, empty, pagination, latency, timeout,
-HTTP error, per-endpoint failure, timeout-after-save, and offline-on-finish
-scenarios. Selecting a scenario also updates the `scenario` query parameter;
-**Reset mock data** restores the success scenario and clears mock-server data.
-The mocks run in development and production and persist accepted mock matches
-locally in the browser.
+then match ID. Fixture players populate the ranking. For development and E2E
+testing, MSW supports success, empty, pagination, latency, timeout, HTTP error,
+per-endpoint failure, timeout-after-save, and offline-on-finish scenarios via
+the `scenario` query parameter (for example, `?scenario=empty`). The mocks run
+in development and production and persist accepted mock matches locally in the
+browser.
 
 Playwright currently covers options persistence, deterministic movement and
 combat/spawning, island and arena-boundary blocking, match end on player death,
 manual and focus-loss pause, fresh-match behavior, mobile touch controls,
-asset load retry, combat damage/cooldowns/scoring, end by timer, abandoned
-matches, result persistence across refresh, pending upload recovery,
-timeout-after-save idempotency, delayed ranking responses, and pagination plus
-empty/failure scenarios. Visual baselines cover the menu, paused arena, and
+mock API startup readiness/failure, combat damage/cooldowns/scoring, end by
+timer, abandoned matches, result persistence across refresh, pending upload
+recovery, timeout-after-save idempotency, delayed ranking responses, and
+pagination plus empty/failure scenarios. Visual baselines cover the menu, paused arena, and
 completed result on both viewports; they are stored under
 `e2e/__screenshots__/`. Test traces and failure artifacts are written under the
 ignored `test-results/` directory. The latest validation results and the
@@ -112,8 +117,11 @@ omitted from normal production builds.
 
 ## Project architecture
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the simulation/rendering boundary,
-fixed-step lifecycle, input handling, pause behavior, current limitations, and
-the planned integration boundaries for features not implemented yet.
+The code is organized conceptually into presentation, application coordination,
+domain rules, and infrastructure/adapters. See [ARCHITECTURE.md](./ARCHITECTURE.md)
+for each layer's responsibilities, the simulation/rendering boundary, fixed-step
+lifecycle, input handling, pause behavior, and current limitations. The editable
+layered architecture diagram is available at
+[docs/architecture.drawio](./docs/architecture.drawio).
 
 See [copilot-instruction.md](./.github/copilot-instructions.md) for the project's System Design Specification (SDD), defining its architecture, technical requirements, coding conventions, and operational context for integration with generative AI models and AI-powered development agents. See GitHub README for the project overview.

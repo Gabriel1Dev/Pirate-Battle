@@ -138,6 +138,7 @@ export function GameScreen({
   const [loaded, setLoaded] = useState(false);
   const [assetProgress, setAssetProgress] = useState(0);
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [optionsSavedNotice, setOptionsSavedNotice] = useState(false);
   const [optionsSaveError, setOptionsSaveError] = useState<string | null>(null);
   const [matchSaveError, setMatchSaveError] = useState<string | null>(null);
   const [matchSaved, setMatchSaved] = useState(false);
@@ -399,6 +400,7 @@ export function GameScreen({
       onSaveOptions(nextOptions);
       setOptionsSaveError(null);
       setOptionsOpen(false);
+      setOptionsSavedNotice(true);
     } catch (error: unknown) {
       setOptionsSaveError(
         error instanceof Error
@@ -516,7 +518,7 @@ export function GameScreen({
             </div>
           </div>
         )}
-        {(isPaused || isFinished) && !optionsOpen && (
+        {(isPaused || isFinished) && !optionsOpen && !optionsSavedNotice && (
           <div
             aria-labelledby="match-overlay-title"
             aria-modal="true"
@@ -593,6 +595,42 @@ export function GameScreen({
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {optionsSavedNotice && (
+          <div
+            aria-labelledby="options-saved-title"
+            aria-modal="true"
+            className="arena-overlay"
+            role="dialog"
+          >
+            <div className="overlay-card">
+              <span className="game-kicker">Options saved</span>
+              <h2 id="options-saved-title">NEXT VOYAGE</h2>
+              <p>
+                These settings will take effect in your next match. Would you
+                like to return to the main menu or continue playing?
+              </p>
+              <div className="overlay-actions">
+                <button
+                  className="primary-button menu-button"
+                  onClick={() => {
+                    setOptionsSavedNotice(false);
+                    togglePause();
+                  }}
+                  type="button"
+                >
+                  CONTINUE PLAYING
+                </button>
+                <button
+                  className="primary-button menu-button"
+                  onClick={onExit}
+                  type="button"
+                >
+                  MAIN MENU
+                </button>
+              </div>
             </div>
           </div>
         )}
