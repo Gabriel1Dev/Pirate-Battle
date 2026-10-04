@@ -2,7 +2,6 @@ import {
   Application,
   Assets,
   Container,
-  Graphics,
   Rectangle,
   Sprite,
   Texture,
@@ -44,6 +43,8 @@ const ISLAND_GRASS_FRAME = new Rectangle(384, 128, 64, 64);
 const ISLAND_SAND_FRAME = new Rectangle(0, 0, 192, 192);
 const MISC_TEXTURE_PATH =
   "/assets/spritesheet/ships_miscellaneous_sheet.png";
+const CANNON_BALL_TEXTURE_PATH =
+  "/assets/png/default/ship_parts/cannon_ball.png";
 const MISC_FRAMES = {
   cannonLoose: new Rectangle(439, 496, 20, 12),
   dinghy: new Rectangle(606, 145, 20, 38),
@@ -82,6 +83,7 @@ const ASSET_TEXTURE_PATHS = [
   ...Object.values(HEALTH_TEXTURE_PATHS),
   ...Object.values(TILE_TEXTURE_PATHS),
   MISC_TEXTURE_PATH,
+  CANNON_BALL_TEXTURE_PATH,
   ...Object.values(EFFECT_TEXTURE_PATHS).flat(),
 ];
 
@@ -99,11 +101,6 @@ const HEALTH_BAR_LAYOUT = {
 } as const;
 
 const WATER_COLOR = 0x15536b;
-const PROJECTILE_COLORS = {
-  player: 0xffdf77,
-  enemy: 0xff725e,
-} as const;
-
 interface ShipViews {
   readonly sprite: Sprite;
   readonly fireSprite: Sprite;
@@ -204,6 +201,7 @@ const ISLAND_DETAILS: readonly (readonly IslandDetail[])[] = [
 export interface GameRenderer {
   readonly application: Application;
   draw(state: GameState, deltaSeconds?: number): void;
+  getCameraTransform(): { readonly x: number; readonly y: number; readonly scale: number };
   getCreatedDestructionFragmentCount(): number;
   getRenderedShipIds(): readonly number[];
   destroy(): void;
@@ -595,6 +593,7 @@ export async function initializePixiRenderer(
     foliageLargeTexture,
     rockTexture,
     miscellaneousTexture,
+    cannonBallTexture,
     fireTextureOne,
     fireTextureTwo,
     explosionTextureOne,
@@ -620,6 +619,7 @@ export async function initializePixiRenderer(
     loadTexture(TILE_TEXTURE_PATHS.foliageLarge),
     loadTexture(TILE_TEXTURE_PATHS.rock),
     loadTexture(MISC_TEXTURE_PATH),
+    loadTexture(CANNON_BALL_TEXTURE_PATH),
     ...EFFECT_TEXTURE_PATHS.fire.map(loadTexture),
     ...EFFECT_TEXTURE_PATHS.explosion.map(loadTexture),
   ]);
@@ -693,7 +693,7 @@ export async function initializePixiRenderer(
   const effectLayer = new Container();
   const entityLayer = new Container();
   const destructionLayer = new Container();
-  const projectileGraphics = new Graphics();
+  const projectileLayer = new Container();
   world.addChild(
     water,
     islandLayer,
@@ -701,7 +701,7 @@ export async function initializePixiRenderer(
     effectLayer,
     entityLayer,
     destructionLayer,
-    projectileGraphics,
+    projectileLayer,
   );
   application.stage.addChild(world);
   host.appendChild(application.canvas);
@@ -711,6 +711,7 @@ export async function initializePixiRenderer(
   }
 
   const shipViews = new Map<number, ShipViews>();
+  const projectileViews = new Map<number, Sprite>();
   const effectViews: EffectView[] = [];
   const destructionViews: DestructionView[] = [];
   const wreckViews: WreckView[] = [];
@@ -805,8 +806,19 @@ export async function initializePixiRenderer(
       screen.height / config.arena.height,
     );
     world.scale.set(scale);
+    const screenIsNarrowerThanArena =
+      screen.width / screen.height <
+      config.arena.width / config.arena.height;
+    const centeredX = (screen.width - config.arena.width * scale) / 2;
+    const followX = Math.min(
+      0,
+      Math.max(
+        screen.width - config.arena.width * scale,
+        screen.width / 2 - state.player.pos.x * scale,
+      ),
+    );
     world.position.set(
-      (screen.width - config.arena.width * scale) / 2,
+      screenIsNarrowerThanArena ? followX : centeredX,
       (screen.height - config.arena.height * scale) / 2,
     );
 
@@ -1012,11 +1024,27 @@ export async function initializePixiRenderer(
       drawHealthBar(view.healthBar, ship, healthTextures, config);
     }
 
-    projectileGraphics.clear();
+    const visibleProjectileIds = new Set<number>();
     for (const projectile of state.projectiles) {
-      projectileGraphics
-        .circle(projectile.pos.x, projectile.pos.y, projectile.radius)
-        .fill(PROJECTILE_COLORS[projectile.owner]);
+      visibleProjectileIds.add(projectile.id);
+      let sprite = projectileViews.get(projectile.id);
+      if (!sprite) {
+        sprite = new Sprite(cannonBallTexture);
+        sprite.anchor.set(0.5);
+        projectileViews.set(projectile.id, sprite);
+        projectileLayer.addChild(sprite);
+      }
+
+      sprite.position.set(projectile.pos.x, projectile.pos.y);
+      sprite.width = projectile.radius * 2;
+      sprite.height = projectile.radius * 2;
+    }
+    for (const [id, sprite] of projectileViews) {
+      if (!visibleProjectileIds.has(id)) {
+        projectileLayer.removeChild(sprite);
+        sprite.destroy({ texture: false, textureSource: false });
+        projectileViews.delete(id);
+      }
     }
 
   };
@@ -1024,6 +1052,11 @@ export async function initializePixiRenderer(
   return {
     application,
     draw,
+    getCameraTransform: () => ({
+      x: world.position.x,
+      y: world.position.y,
+      scale: world.scale.x,
+    }),
     getCreatedDestructionFragmentCount: () =>
       createdDestructionFragmentCount,
     getRenderedShipIds: () => [...shipViews.keys()],
@@ -1035,6 +1068,7 @@ export async function initializePixiRenderer(
       islandTextures.base.destroy(true);
       destructionFrameTextures.forEach((texture) => texture.destroy(false));
       shipViews.clear();
+      projectileViews.clear();
     },
   };
 }

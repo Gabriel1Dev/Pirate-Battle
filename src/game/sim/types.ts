@@ -34,6 +34,13 @@ export interface Projectile {
   radius: number;
 }
 
+export interface PendingBroadsideSalvo {
+  angle: number;
+  shipAngle: number;
+  offsets: number[];
+  timeUntilNextShotSec: number;
+}
+
 export interface Island {
   pos: Vec2;
   radius: number;
@@ -84,6 +91,10 @@ export interface GameState {
   player: Ship;
   enemies: Ship[];
   projectiles: Projectile[];
+  pendingBroadsideSalvos: Record<
+    "left" | "right",
+    PendingBroadsideSalvo | null
+  >;
   islands: readonly Island[];
 
   spawnTimerSec: number;

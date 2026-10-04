@@ -25,6 +25,7 @@ import { OptionsScreen } from "./OptionsScreen";
 
 interface GameTestHook {
   getState(): GameState | null;
+  getCameraTransform(): { readonly x: number; readonly y: number; readonly scale: number } | null;
   getCreatedDestructionFragmentCount(): number;
   getRenderedShipIds(): readonly number[];
   setInput(input: Partial<InputState>): void;
@@ -215,6 +216,8 @@ export function GameScreen({
         const state = gameStateRef.current;
         return state ? structuredClone(state) : null;
       },
+      getCameraTransform: () =>
+        rendererRef.current?.getCameraTransform() ?? null,
       getCreatedDestructionFragmentCount: () =>
         rendererRef.current?.getCreatedDestructionFragmentCount() ?? 0,
       getRenderedShipIds: () =>

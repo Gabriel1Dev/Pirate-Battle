@@ -175,7 +175,6 @@
 }
 
 .text-action-button,
-.menu-data-tabs button,
 .pagination-controls button {
   border: 1px solid #8e815f;
   border-radius: 4px;
@@ -187,7 +186,6 @@
 }
 
 .text-action-button:hover,
-.menu-data-tabs button:hover,
 .pagination-controls button:hover:not(:disabled) {
   background: #284d52;
 }
@@ -203,55 +201,53 @@
 .menu-data-tabs {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
-.network-demo-controls {
-  width: min(100%, 360px);
-  margin-top: 8px;
-  color: #c3d1cb;
-  font-size: 0.8rem;
-  text-align: left;
-}
-
-.network-demo-controls summary {
-  width: fit-content;
-  margin: 0 auto;
-  color: #c3d1cb;
+.menu-data-tabs button {
+  display: grid;
+  min-width: min(38vw, 150px);
+  min-height: 48px;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 16px;
+  background-color: transparent;
+  background-image: url("/assets/png/default/ui/menu/button_secondary_normal.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: #f2dfb0;
   cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.network-demo-controls summary:focus-visible,
-.network-demo-controls select:focus-visible,
-.network-demo-controls button:focus-visible {
+.home-card .menu-button {
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.menu-data-tabs button:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+
+.menu-data-tabs button:active:not(:disabled),
+.menu-data-tabs button[aria-pressed="true"] {
+  background-image: url("/assets/png/default/ui/menu/button_secondary_pressed.png");
+}
+
+.menu-data-tabs button:active:not(:disabled) {
+  filter: none;
+  transform: translateY(1px);
+}
+
+.menu-data-tabs button:focus-visible {
   outline: 2px solid #f0d792;
   outline-offset: 3px;
-}
-
-.network-demo-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.network-demo-actions select {
-  max-width: 100%;
-  border: 1px solid #8e815f;
-  border-radius: 4px;
-  padding: 6px 8px;
-  background: #18343b;
-  color: #f2dfb0;
-  font: inherit;
-}
-
-.menu-data-tabs button[aria-pressed="true"] {
-  border-color: #f0d792;
-  background: #695130;
-  color: #fff7e5;
 }
 
 .menu-data-panel {
@@ -350,10 +346,16 @@
   background-image: url("/assets/png/default/ui/menu/button_secondary_normal.png");
 }
 
-.menu-button.secondary-button:hover,
-.menu-button.secondary-button:active {
+.home-card .menu-button.secondary-button:hover {
+  background-color: transparent;
+  filter: brightness(1.2);
+}
+
+.home-card .menu-button.secondary-button:active {
   background-color: transparent;
   background-image: url("/assets/png/default/ui/menu/button_secondary_pressed.png");
+  filter: none;
+  transform: translateY(1px);
 }
 
 .options-card {
