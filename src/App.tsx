@@ -6,6 +6,7 @@ import {
   type GameConfig,
   type MatchOptions,
 } from "./game/config";
+import { playUiSound } from "./game/audio/gameAudio";
 import { OptionsScreen } from "./ui/OptionsScreen";
 import "./App.css";
 import { GameScreen } from "./ui/GameScreen";
@@ -79,6 +80,73 @@ export default function App(): React.JSX.Element {
   const submitMatchMutation = useSubmitMatch();
   const { mutateAsync: submitMatchAsync } = submitMatchMutation;
   const attemptedMatchIds = useRef(new Set<string>());
+  useEffect(() => {
+    let audioUnlocked = false;
+    const handleClick = (event: MouseEvent): void => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      audioUnlocked = true;
+
+      const button = event.target.closest("button");
+      const label = button?.getAttribute("aria-label")?.toLowerCase() ?? "";
+      if (
+        !button ||
+        button.disabled ||
+        label === "pause battle" ||
+        label === "resume battle" ||
+        button.classList.contains("touch-control")
+      ) {
+        return;
+      }
+
+      const text = button.textContent?.trim().toLowerCase() ?? "";
+      if (label.includes("close") || text === "close") {
+        playUiSound("ui_close");
+      } else if (
+        label.includes("main menu") ||
+        text === "main menu" ||
+        text === "back" ||
+        text === "cancel"
+      ) {
+        playUiSound("ui_back");
+      } else if (
+        text === "options" ||
+        text === "ranking" ||
+        text === "match history"
+      ) {
+        playUiSound("ui_open");
+      } else {
+        playUiSound("ui_click");
+      }
+    };
+    const handlePointerOver = (event: PointerEvent): void => {
+      if (!audioUnlocked || !(event.target instanceof Element)) {
+        return;
+      }
+
+      const button = event.target.closest("button");
+      if (
+        !button ||
+        button.disabled ||
+        button.classList.contains("touch-control") ||
+        (event.relatedTarget instanceof Node &&
+          button.contains(event.relatedTarget))
+      ) {
+        return;
+      }
+
+      playUiSound("ui_hover");
+    };
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("pointerover", handlePointerOver);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("pointerover", handlePointerOver);
+    };
+  }, []);
+
   const pendingMatches = useMemo(
     () => getPendingMatches(storedMatches.matches),
     [storedMatches.matches],

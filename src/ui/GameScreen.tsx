@@ -11,6 +11,7 @@ import {
 import { advanceGame } from "../game/sim/step";
 import { createInitialGameState } from "../game/sim/world";
 import { pauseGame, resumeGame } from "../game/sim/pause";
+import { GameAudio } from "../game/audio/gameAudio";
 import {
   EMPTY_INPUT,
   type GameState,
@@ -124,6 +125,7 @@ export function GameScreen({
   const inputStateRef = useRef<InputState>({ ...EMPTY_INPUT });
   const inputRef = useRef<KeyboardInput | null>(null);
   const rendererRef = useRef<GameRenderer | null>(null);
+  const audioRef = useRef<GameAudio | null>(null);
   const hud = useGameStore((store) => store.hud);
   const setHud = useGameStore((store) => store.setHud);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -145,6 +147,8 @@ export function GameScreen({
     let manualClock = false;
     let hudElapsedSeconds = 0;
     let matchWasPersisted = false;
+    const audio = new GameAudio();
+    audioRef.current = audio;
     const initialState = createInitialGameState(seed, config);
     gameStateRef.current = initialState;
     setHud(createHudSnapshot(initialState));
@@ -191,6 +195,9 @@ export function GameScreen({
       }
 
       const pausedState = pauseGame(state);
+      if (pausedState !== state) {
+        audio.pause();
+      }
       gameStateRef.current = pausedState;
       inputRef.current?.clear();
       setHud(createHudSnapshot(pausedState));
@@ -224,7 +231,9 @@ export function GameScreen({
             remainingSeconds,
             state.config.step.maxFrameSec,
           );
-          state = advanceGame(state, inputStateRef.current, delta);
+          const nextState = advanceGame(state, inputStateRef.current, delta);
+          audio.update(state, nextState);
+          state = nextState;
           remainingSeconds -= delta;
         }
 
@@ -239,6 +248,7 @@ export function GameScreen({
         gameStateRef.current = state;
         Object.assign(inputStateRef.current, EMPTY_INPUT);
         inputRef.current?.clear();
+        audio.reset();
         rendererRef.current?.draw(state);
         setHud(createHudSnapshot(state));
       },
@@ -265,6 +275,7 @@ export function GameScreen({
         }
 
         rendererRef.current = renderer;
+        audio.start();
         setLoaded(true);
         const keyboard = createKeyboardInput(inputStateRef.current);
         inputRef.current = keyboard;
@@ -283,6 +294,7 @@ export function GameScreen({
               keyboard.state,
               ticker.deltaMS / 1000,
             );
+            audio.update(currentState, nextState);
             gameStateRef.current = nextState;
             persistFinishedMatch(nextState);
             hudDirty ||= nextState.status !== currentState.status;
@@ -321,6 +333,10 @@ export function GameScreen({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       inputRef.current?.destroy();
       inputRef.current = null;
+      audio.dispose();
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
       rendererRef.current?.destroy();
       rendererRef.current = null;
       gameStateRef.current = null;
@@ -342,6 +358,11 @@ export function GameScreen({
 
     const nextState =
       state.status === "paused" ? resumeGame(state) : pauseGame(state);
+    if (nextState.status === "paused") {
+      audioRef.current?.pause();
+    } else if (nextState.status === "running") {
+      audioRef.current?.resume();
+    }
     gameStateRef.current = nextState;
     inputRef.current?.clear();
     setHud(createHudSnapshot(nextState));
