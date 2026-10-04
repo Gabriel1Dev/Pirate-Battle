@@ -68,17 +68,19 @@ development test hook is removed at the same lifecycle boundary.
 
 The renderer scales and centers the logical arena within the available canvas.
 It tiles the supplied ocean texture across the arena and builds each island
-from masked sand and grass textures with local foliage and rock details. The
-shore masks use the configured island radii, preserving the simulation's
-circular collision footprint. Supplied ship sprites and player/enemy health-bar
-frame and fill sprites are loaded locally. Shot, hit, and destruction events
-drive transient Pixi effects using the supplied fire and explosion textures;
-effect timing and scale are part of the match config, and the renderer consumes
-each state's one-shot events only once. Projectile bodies remain colored
-circles. The React HUD and touch/action buttons use the supplied health,
+from a larger, irregularly masked island sprite, a shallow-water shoreline,
+varied foliage, shoreline rocks, and a decorative cannon. The shore masks use
+the configured island radii, preserving the simulation's circular collision
+footprint. Supplied ship sprites and player/enemy health-bar frame and fill
+sprites are loaded locally. Shot, hit, and destruction events drive transient
+Pixi effects using the supplied fire and explosion textures; each destroyed
+ship also leaves a life boat, survivors, and separated wood debris that gently
+drift, fade, and expire. Cannonballs use the supplied cannon-ball sprite, with
+short, subtle trails tinted by their owner. The renderer consumes each state's
+one-shot events only once. The React HUD and touch/action buttons use the supplied health,
 round-button, and icon assets while remaining semantic, accessible controls.
-Asset loading reports texture completion progress to the React loading overlay,
-then marks the renderer ready after Pixi initialization.
+Asset loading reports texture completion progress to the React loading
+overlay, then marks the renderer ready after Pixi initialization.
 
 ## Configuration and current scope
 
