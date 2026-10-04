@@ -6,15 +6,15 @@ O desafio avalia gameplay, domínio de PixiJS, arquitetura, integração de dado
 
 ## 1. Stack obrigatória
 
-| Responsabilidade | Tecnologia |
-| --- | --- |
-| Interface e menus | React |
-| Linguagem | TypeScript em modo estrito |
-| Renderização do jogo | PixiJS |
-| Estado remoto do ranking e do histórico | TanStack Query |
-| Cliente HTTP do ranking e do histórico | Axios |
-| Mocking das APIs de ranking e histórico | MSW |
-| Testes E2E e regressão visual | Playwright |
+| Responsabilidade                        | Tecnologia                 |
+| --------------------------------------- | -------------------------- |
+| Interface e menus                       | React                      |
+| Linguagem                               | TypeScript em modo estrito |
+| Renderização do jogo                    | PixiJS                     |
+| Estado remoto do ranking e do histórico | TanStack Query             |
+| Cliente HTTP do ranking e do histórico  | Axios                      |
+| Mocking das APIs de ranking e histórico | MSW                        |
+| Testes E2E e regressão visual           | Playwright                 |
 
 Todas as tecnologias devem participar efetivamente da solução. A ferramenta de build, a estilização e as bibliotecas complementares ficam a critério do candidato.
 
@@ -34,10 +34,10 @@ Defina controles de teclado e controles de toque para movimento, rotação e ata
 
 ### Inimigos
 
-| Tipo | Comportamento |
-| --- | --- |
-| **Chaser** | Persegue o jogador, causa dano ao colidir com seu navio e explode no impacto |
-| **Shooter** | Aproxima-se do jogador e dispara quando estiver dentro do alcance de ataque |
+| Tipo        | Comportamento                                                                |
+| ----------- | ---------------------------------------------------------------------------- |
+| **Chaser**  | Persegue o jogador, causa dano ao colidir com seu navio e explode no impacto |
+| **Shooter** | Aproxima-se do jogador e dispara quando estiver dentro do alcance de ataque  |
 
 Ambos devem avançar, rotacionar, receber dano e respeitar as colisões com ilhas. Os dois tipos precisam aparecer durante uma partida padrão.
 
@@ -70,14 +70,14 @@ Implemente efeitos de disparo, explosão de destruição e deterioração visual
 
 ## 3. Telas e configurações
 
-| Tela | Requisitos |
-| --- | --- |
-| Menu principal | Ações **Play** e **Options**, instruções de controle e abas **Ranking** e **Match History** |
-| Options | **Game session time** e **Enemy spawn time**, com validação, salvamento e persistência após refresh |
-| Partida | Arena PixiJS, HUD, controles e pausa |
-| Resultado | Pontuação total, tempo jogado, motivo do encerramento, situação do registro da partida e ações **Play Again** e **Main Menu** |
-| Ranking | Classificação, identificação dos jogadores, pontuação e paginação |
-| Match History | Histórico do jogador, com data, pontuação, duração, motivo do encerramento e paginação |
+| Tela           | Requisitos                                                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Menu principal | Ações **Play** e **Options**, instruções de controle e abas **Ranking** e **Match History**                                   |
+| Options        | **Game session time** e **Enemy spawn time**, com validação, salvamento e persistência após refresh                           |
+| Partida        | Arena PixiJS, HUD, controles e pausa                                                                                          |
+| Resultado      | Pontuação total, tempo jogado, motivo do encerramento, situação do registro da partida e ações **Play Again** e **Main Menu** |
+| Ranking        | Classificação, identificação dos jogadores, pontuação e paginação                                                             |
+| Match History  | Histórico do jogador, com data, pontuação, duração, motivo do encerramento e paginação                                        |
 
 Centralize os parâmetros de gameplay em uma configuração tipada e ajustável: duração, intervalo e distribuição dos spawns, vida, velocidades de movimento e rotação, dano, alcance, velocidade e duração dos projéteis, cooldowns e alcance do Shooter. Mudanças de balanceamento não devem exigir alterações na lógica dos sistemas.
 
@@ -109,9 +109,9 @@ As regras de movimentação, combate, colisões e comportamento dos inimigos dev
 
 Implemente as abas **Ranking** e **Match History** no menu principal, com contratos tipados para os seguintes recursos:
 
-| Recurso | Operações mínimas |
-| --- | --- |
-| Ranking | Consultar classificação paginada, ordenada por pontuação |
+| Recurso   | Operações mínimas                                                           |
+| --------- | --------------------------------------------------------------------------- |
+| Ranking   | Consultar classificação paginada, ordenada por pontuação                    |
 | Histórico | Registrar uma partida concluída e consultar o histórico paginado do jogador |
 
 Cada registro deve conter identificação da partida e do jogador, data, pontuação, duração efetiva, motivo do encerramento e configuração usada. Compare no ranking partidas com a mesma configuração e adote um critério determinístico de desempate. Outros jogadores são representados por fixtures.
@@ -141,7 +141,7 @@ Inclua uma forma de selecionar os cenários e restaurar o estado inicial. Contro
 
 ## 7. Interface, assets e acessibilidade
 
-Os arquivos estão disponíveis em [assets/](assets/): navios, partes de navios, projéteis, efeitos, tiles, sprites de HUD e menus, spritesheets e imagens de referência. Os atlas de interface estão em [ui_sheet.json](assets/spritesheet/ui_sheet.json) e [ui_sheet_retina.json](assets/spritesheet/ui_sheet_retina.json), com recortes, alinhamento e caminhos dos PNGs individuais. Os campos `ui` contêm metadados complementares; suas medidas e as bordas usam unidades lógicas (1×), relativas ao canto superior esquerdo do sprite. Os efeitos sonoros e loops de ambiente estão em [assets/sounds/](assets/sounds/), no formato WAV.
+Os arquivos estão disponíveis em [assets/](assets/): navios, partes de navios, projéteis, efeitos, tiles, sprites de HUD e menus, spritesheets e imagens de referência. Os atlas de interface estão em [ui_sheet.json](assets/spritesheet/ui_sheet.json) e [ui_sheet_retina.json](assets/spritesheet/ui_sheet_retina.json), com recortes, alinhamento e caminhos dos PNGs individuais. Os campos `ui` contêm metadados complementares; suas medidas e as bordas usam unidades lógicas (1×), relativas ao canto superior esquerdo do sprite. Os efeitos sonoros e loops de ambiente estão em [assets/sounds/](assets/sounds/), no formato WAV. A interface reproduz sons de navegação; a partida associa efeitos e loops aos tiros, impactos, dano, pontuação, alertas, pausa e encerramento. A vela rasgada do jogador aparece progressivamente conforme a vida cai, usando os limites visuais da configuração da partida.
 
 Utilize os assets fornecidos como base visual. Conversão de atlas, otimização de imagens e recursos complementares são permitidos; inclua as fontes e licenças correspondentes na entrega.
 
@@ -182,16 +182,16 @@ Verifique o uso de memória após cinco ciclos de iniciar, jogar e sair, investi
 
 ## 10. Critérios de avaliação
 
-| Critério | Pontos |
-| --- | ---: |
-| Gameplay, regras, colisões e comportamento dos inimigos | 35 |
-| PixiJS, arquitetura e ciclo de vida dos recursos | 20 |
-| Interface, feedback, responsividade e acessibilidade | 15 |
-| TanStack Query, Axios e consistência do ranking e histórico | 10 |
-| MSW e cenários de falha | 5 |
-| Testes com Playwright | 10 |
-| Performance e documentação | 5 |
-| **Total** | **100** |
+| Critério                                                    |  Pontos |
+| ----------------------------------------------------------- | ------: |
+| Gameplay, regras, colisões e comportamento dos inimigos     |      35 |
+| PixiJS, arquitetura e ciclo de vida dos recursos            |      20 |
+| Interface, feedback, responsividade e acessibilidade        |      15 |
+| TanStack Query, Axios e consistência do ranking e histórico |      10 |
+| MSW e cenários de falha                                     |       5 |
+| Testes com Playwright                                       |      10 |
+| Performance e documentação                                  |       5 |
+| **Total**                                                   | **100** |
 
 Serão considerados o funcionamento completo da partida, a clareza das responsabilidades, a qualidade do código e a execução reproduzível. O console deve permanecer sem erros não tratados durante os fluxos previstos.
 
@@ -236,6 +236,7 @@ npm run build
 npx tsc -b --pretty false
 npm run lint
 npm run test:e2e
+npm run test:profile
 npm run preview
 ```
 
@@ -246,6 +247,12 @@ Chromium desktop and a mobile Chromium profile and writes the HTML report to
 `playwright-report/`; open it with `npm run test:e2e:report`. To intentionally
 replace screenshot baselines after reviewing a visual change, use
 `npm run test:e2e:update`.
+
+`npm run test:profile` creates a separate optimized profiling build, serves it
+with Vite Preview, and records frame pacing, three-minute match entity counts,
+and heap readings across twenty start/exit cycles. The profile-only test hook is
+not included in the normal production build. Profiling output and the written
+measurements are documented in `PERFORMANCE.md`.
 
 ### Implemented gameplay
 
@@ -287,31 +294,35 @@ locally in the browser.
 Playwright currently covers options persistence, deterministic movement and
 combat/spawning, island and arena-boundary blocking, match end on player death,
 manual and focus-loss pause, fresh-match behavior, mobile touch controls,
-pending upload recovery, timeout-after-save idempotency, and ranking pagination
-plus empty/failure scenarios. Visual baselines cover the menu, paused arena, and
+asset load retry, combat damage/cooldowns/scoring, end by timer, abandoned
+matches, result persistence across refresh, pending upload recovery,
+timeout-after-save idempotency, delayed ranking responses, and pagination plus
+empty/failure scenarios. Visual baselines cover the menu, paused arena, and
 completed result on both viewports; they are stored under
 `e2e/__screenshots__/`. Test traces and failure artifacts are written under the
-ignored `test-results/` directory. The latest validation passed the production
-build and 25 Playwright tests; the desktop-only run skips the mobile touch test.
+ignored `test-results/` directory. The latest validation results and the
+profiling conditions are recorded in `TEST_REPORT.md` and `PERFORMANCE.md`.
 The production preview also confirmed that MSW starts, a completed match is
 submitted once, and its record appears in history and ranking.
 
 ### Deploy to Vercel
 
 The repository includes `vercel.json` with the Vite build command and `dist`
-output directory. Import the GitHub repository in Vercel and deploy with the
-Vite framework preset. No environment variables or external API credentials are
-required: ranking and history are served by MSW in the production build. After
-deployment, open the public URL, confirm the Network demo selector works, and
-record the URL here for the challenge submission.
+output directory. The public deployment is
+https://pirate-battle-navy.vercel.app/. No environment variables or external API
+credentials are required: ranking and history are served by MSW in the
+production build. After pushing changes, verify the updated deployment at that
+URL.
 
 In development, `window.__game` can read a copied simulation state, set the
 current input, advance a deterministic amount of simulation time, reset with a
-seed, or switch back to the real-time clock. This hook is omitted from
-production builds.
+seed, or switch back to the real-time clock. The hook is also enabled in the
+separate performance profile build for reproducible entity counts; it is
+omitted from normal production builds.
 
 ## Project architecture
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the simulation/rendering boundary,
 fixed-step lifecycle, input handling, pause behavior, current limitations, and
 the planned integration boundaries for features not implemented yet.
+See [copilot-instruction.md](./.github/copilot-instructions.md) for the project's System Design Specification (SDD), defining its architecture, technical requirements, coding conventions, and operational context for integration with generative AI models and AI-powered development agents. See GitHub README for the project overview.

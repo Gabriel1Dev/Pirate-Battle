@@ -3,9 +3,10 @@ import {
   Assets,
   Container,
   Graphics,
+  Rectangle,
   Sprite,
+  Texture,
   TilingSprite,
-  type Texture,
 } from "pixi.js";
 import type { GameConfig, IslandConfig } from "../config";
 import type { GameEvent, GameState, Ship } from "../sim/types";
@@ -14,6 +15,11 @@ const SHIP_TEXTURE_PATHS = {
   player: "/assets/png/default/ships/ship_1.png",
   chaser: "/assets/png/default/ships/ship_5.png",
   shooter: "/assets/png/default/ships/ship_10.png",
+} as const;
+const DAMAGED_SAIL_TEXTURE_PATHS = {
+  player: "/assets/png/default/ship_parts/sail_large_13.png",
+  chaser: "/assets/png/default/ship_parts/sail_large_23.png",
+  shooter: "/assets/png/default/ship_parts/sail_large_22.png",
 } as const;
 
 const HEALTH_TEXTURE_PATHS = {
@@ -27,14 +33,15 @@ const HEALTH_TEXTURE_PATHS = {
 } as const;
 
 const TILE_TEXTURE_PATHS = {
+  islandSheet: "/assets/tilesheet/tiles_sheet.png",
   water: "/assets/png/default/tiles/tile_73.png",
-  sand: "/assets/png/default/tiles/tile_72.png",
-  grass: "/assets/png/default/tiles/tile_39.png",
-  foliage: "/assets/png/default/tiles/tile_68.png",
-  plant: "/assets/png/default/tiles/tile_70.png",
+  foliage: "/assets/png/default/tiles/tile_70.png",
+  foliageLarge: "/assets/png/default/tiles/tile_71.png",
   rock: "/assets/png/default/tiles/tile_50.png",
-  rockCluster: "/assets/png/default/tiles/tile_55.png",
 } as const;
+
+const ISLAND_GRASS_FRAME = new Rectangle(384, 128, 64, 64);
+const ISLAND_SAND_FRAME = new Rectangle(0, 0, 192, 192);
 
 const EFFECT_TEXTURE_PATHS = {
   fire: [
@@ -50,6 +57,7 @@ const EFFECT_TEXTURE_PATHS = {
 
 const ASSET_TEXTURE_PATHS = [
   ...Object.values(SHIP_TEXTURE_PATHS),
+  ...Object.values(DAMAGED_SAIL_TEXTURE_PATHS),
   ...Object.values(HEALTH_TEXTURE_PATHS),
   ...Object.values(TILE_TEXTURE_PATHS),
   ...Object.values(EFFECT_TEXTURE_PATHS).flat(),
@@ -76,6 +84,7 @@ const PROJECTILE_COLORS = {
 
 interface ShipViews {
   readonly sprite: Sprite;
+  readonly fireSprite: Sprite;
   readonly healthBar: HealthBarView;
 }
 
@@ -94,12 +103,10 @@ interface HealthTextures {
 }
 
 interface IslandTextures {
-  readonly sand: Texture;
-  readonly grass: Texture;
+  readonly base: Texture;
   readonly foliage: Texture;
-  readonly plant: Texture;
+  readonly foliageLarge: Texture;
   readonly rock: Texture;
-  readonly rockCluster: Texture;
 }
 
 interface IslandDetail {
@@ -119,20 +126,19 @@ interface EffectView {
 
 const ISLAND_DETAILS: readonly (readonly IslandDetail[])[] = [
   [
-    { texture: "foliage", x: -0.2, y: -0.1, size: 0.78 },
-    { texture: "rockCluster", x: 0.26, y: 0.25, size: 0.55 },
-    { texture: "rock", x: -0.35, y: 0.34, size: 0.3 },
+    { texture: "foliage", x: -0.2, y: -0.1, size: 0.42 },
+    { texture: "foliageLarge", x: 0.23, y: 0.24, size: 0.35 },
+    { texture: "rock", x: -0.35, y: 0.34, size: 0.23 },
   ],
   [
-    { texture: "foliage", x: 0.14, y: -0.18, size: 0.74 },
-    { texture: "plant", x: -0.32, y: 0.24, size: 0.42 },
-    { texture: "rock", x: 0.33, y: 0.34, size: 0.3 },
+    { texture: "foliage", x: 0.14, y: -0.18, size: 0.42 },
+    { texture: "foliageLarge", x: -0.25, y: 0.25, size: 0.33 },
+    { texture: "rock", x: 0.33, y: 0.34, size: 0.23 },
   ],
   [
-    { texture: "foliage", x: -0.23, y: 0.05, size: 0.72 },
-    { texture: "plant", x: 0.28, y: -0.2, size: 0.48 },
-    { texture: "rockCluster", x: 0.22, y: 0.32, size: 0.54 },
-    { texture: "rock", x: -0.38, y: 0.36, size: 0.28 },
+    { texture: "foliage", x: -0.23, y: 0.05, size: 0.42 },
+    { texture: "foliageLarge", x: 0.22, y: 0.3, size: 0.34 },
+    { texture: "rock", x: -0.38, y: 0.36, size: 0.22 },
   ],
 ];
 
@@ -147,44 +153,16 @@ function createIslandView(
   index: number,
   textures: IslandTextures,
 ): Container {
-  const diameter = island.radius * 2;
   const center = island.radius;
   const islandView = new Container();
   islandView.position.set(island.x - center, island.y - center);
 
-  const sandMask = new Graphics()
-    .circle(center, center, island.radius)
-    .fill({ color: 0xffffff });
-  sandMask.renderable = false;
-  const sand = new TilingSprite({
-    texture: textures.sand,
-    width: diameter,
-    height: diameter,
-  });
-  sand.tileScale.set(1.15);
-  sand.mask = sandMask;
-  islandView.addChild(sand, sandMask);
-
-  const grassRadius = island.radius * 0.73;
-  const grassMask = new Graphics()
-    .circle(center, center, grassRadius)
-    .fill({ color: 0xffffff });
-  grassMask.renderable = false;
-  const grass = new TilingSprite({
-    texture: textures.grass,
-    width: diameter,
-    height: diameter,
-  });
-  grass.tileScale.set(1.08);
-  grass.mask = grassMask;
-  islandView.addChild(grass, grassMask);
-
-  const coastline = new Graphics()
-    .circle(center, center, island.radius - 2)
-    .stroke({ color: 0xf0d18a, width: 4, alpha: 0.8 })
-    .circle(center, center, grassRadius)
-    .stroke({ color: 0x79633c, width: 2, alpha: 0.45 });
-  islandView.addChild(coastline);
+  const ground = new Sprite(textures.base);
+  ground.anchor.set(0.5);
+  ground.position.set(center, center);
+  ground.width = island.radius * 2.35;
+  ground.height = island.radius * 2.35;
+  islandView.addChild(ground);
 
   const details = ISLAND_DETAILS[index % ISLAND_DETAILS.length];
   for (const detail of details) {
@@ -201,6 +179,88 @@ function createIslandView(
   }
 
   return islandView;
+}
+
+function createIslandTexture(atlasTexture: Texture): Texture {
+  const sandFrame = ISLAND_SAND_FRAME;
+  const grassFrame = ISLAND_GRASS_FRAME;
+  const size = sandFrame.width;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Unable to prepare the island grass texture.");
+  }
+
+  context.drawImage(
+    atlasTexture.source.resource,
+    sandFrame.x,
+    sandFrame.y,
+    sandFrame.width,
+    sandFrame.height,
+    0,
+    0,
+    size,
+    size,
+  );
+  context.beginPath();
+  context.moveTo(96, 53);
+  context.bezierCurveTo(120, 49, 143, 66, 136, 88);
+  context.bezierCurveTo(150, 108, 127, 132, 109, 135);
+  context.bezierCurveTo(95, 151, 75, 136, 63, 132);
+  context.bezierCurveTo(42, 128, 50, 103, 48, 87);
+  context.bezierCurveTo(46, 65, 73, 51, 96, 53);
+  context.closePath();
+  context.clip();
+  context.drawImage(
+    atlasTexture.source.resource,
+    grassFrame.x,
+    grassFrame.y,
+    grassFrame.width,
+    grassFrame.height,
+    47,
+    51,
+    100,
+    100,
+  );
+
+  return Texture.from(canvas);
+}
+
+function createDamagedShipTexture(
+  baseTexture: Texture,
+  damagedSailTexture: Texture,
+): Texture {
+  const width = baseTexture.width;
+  const height = baseTexture.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  const baseImage = baseTexture.source.resource;
+  const sailImage = damagedSailTexture.source.resource;
+
+  if (!context) {
+    throw new Error("Unable to prepare the damaged ship texture.");
+  }
+
+  context.drawImage(baseImage, 0, 0, width, height);
+  context.globalCompositeOperation = "destination-out";
+  context.beginPath();
+  context.moveTo(2, 27);
+  context.lineTo(64, 27);
+  context.lineTo(62, 54);
+  context.lineTo(54, 68);
+  context.lineTo(12, 68);
+  context.lineTo(4, 54);
+  context.closePath();
+  context.fill();
+  context.globalCompositeOperation = "source-over";
+  context.drawImage(sailImage, 0, 24, width, 47);
+
+  return Texture.from(canvas);
 }
 
 function createHealthBar(
@@ -260,19 +320,6 @@ function drawHealthBar(
   );
 }
 
-function shipDamageTint(ship: Ship, config: GameConfig): number {
-  const healthRatio = ship.maxHp > 0 ? ship.hp / ship.maxHp : 0;
-  const [firstStage, secondStage] = config.visual.damageStages;
-
-  if (healthRatio <= secondStage) {
-    return 0xff7777;
-  }
-  if (healthRatio <= firstStage) {
-    return 0xffd19a;
-  }
-  return 0xffffff;
-}
-
 export async function initializePixiRenderer(
   host: HTMLElement,
   config: GameConfig,
@@ -288,8 +335,11 @@ export async function initializePixiRenderer(
 
   const [
     playerTexture,
+    damagedPlayerSailTexture,
     chaserTexture,
+    damagedChaserSailTexture,
     shooterTexture,
+    damagedShooterSailTexture,
     playerFrameTexture,
     playerGreenTexture,
     playerAmberTexture,
@@ -298,12 +348,10 @@ export async function initializePixiRenderer(
     enemyGreenTexture,
     enemyRedTexture,
     waterTexture,
-    sandTexture,
-    grassTexture,
+    islandSheetTexture,
     foliageTexture,
-    plantTexture,
+    foliageLargeTexture,
     rockTexture,
-    rockClusterTexture,
     fireTextureOne,
     fireTextureTwo,
     explosionTextureOne,
@@ -311,8 +359,11 @@ export async function initializePixiRenderer(
     explosionTextureThree,
   ] = await Promise.all([
     loadTexture(SHIP_TEXTURE_PATHS.player),
+    loadTexture(DAMAGED_SAIL_TEXTURE_PATHS.player),
     loadTexture(SHIP_TEXTURE_PATHS.chaser),
+    loadTexture(DAMAGED_SAIL_TEXTURE_PATHS.chaser),
     loadTexture(SHIP_TEXTURE_PATHS.shooter),
+    loadTexture(DAMAGED_SAIL_TEXTURE_PATHS.shooter),
     loadTexture(HEALTH_TEXTURE_PATHS.playerFrame),
     loadTexture(HEALTH_TEXTURE_PATHS.playerGreen),
     loadTexture(HEALTH_TEXTURE_PATHS.playerAmber),
@@ -321,15 +372,24 @@ export async function initializePixiRenderer(
     loadTexture(HEALTH_TEXTURE_PATHS.enemyGreen),
     loadTexture(HEALTH_TEXTURE_PATHS.enemyRed),
     loadTexture(TILE_TEXTURE_PATHS.water),
-    loadTexture(TILE_TEXTURE_PATHS.sand),
-    loadTexture(TILE_TEXTURE_PATHS.grass),
+    loadTexture(TILE_TEXTURE_PATHS.islandSheet),
     loadTexture(TILE_TEXTURE_PATHS.foliage),
-    loadTexture(TILE_TEXTURE_PATHS.plant),
+    loadTexture(TILE_TEXTURE_PATHS.foliageLarge),
     loadTexture(TILE_TEXTURE_PATHS.rock),
-    loadTexture(TILE_TEXTURE_PATHS.rockCluster),
     ...EFFECT_TEXTURE_PATHS.fire.map(loadTexture),
     ...EFFECT_TEXTURE_PATHS.explosion.map(loadTexture),
   ]);
+  const damagedTextureByKind = {
+    player: createDamagedShipTexture(playerTexture, damagedPlayerSailTexture),
+    chaser: createDamagedShipTexture(chaserTexture, damagedChaserSailTexture),
+    shooter: createDamagedShipTexture(shooterTexture, damagedShooterSailTexture),
+  };
+  const islandTextures: IslandTextures = {
+    base: createIslandTexture(islandSheetTexture),
+    foliage: foliageTexture,
+    foliageLarge: foliageLargeTexture,
+    rock: rockTexture,
+  };
   const textureByKind = {
     player: playerTexture,
     chaser: chaserTexture,
@@ -374,14 +434,6 @@ export async function initializePixiRenderer(
   application.stage.addChild(world);
   host.appendChild(application.canvas);
 
-  const islandTextures: IslandTextures = {
-    sand: sandTexture,
-    grass: grassTexture,
-    foliage: foliageTexture,
-    plant: plantTexture,
-    rock: rockTexture,
-    rockCluster: rockClusterTexture,
-  };
   for (const [index, island] of config.arena.islands.entries()) {
     islandLayer.addChild(createIslandView(island, index, islandTextures));
   }
@@ -490,8 +542,13 @@ export async function initializePixiRenderer(
 
     for (const [id, view] of shipViews) {
       if (!visibleIds.has(id)) {
-        entityLayer.removeChild(view.sprite, view.healthBar.container);
+        entityLayer.removeChild(
+          view.sprite,
+          view.fireSprite,
+          view.healthBar.container,
+        );
         view.sprite.destroy();
+        view.fireSprite.destroy();
         view.healthBar.container.destroy({ children: true });
         shipViews.delete(id);
       }
@@ -502,21 +559,49 @@ export async function initializePixiRenderer(
       if (!view) {
         const sprite = new Sprite(textureByKind[ship.kind]);
         sprite.anchor.set(0.5);
+        const fireSprite = new Sprite(fireTextureOne);
+        fireSprite.anchor.set(0.5);
+        fireSprite.visible = false;
         const isPlayer = ship.kind === "player";
         const healthBar = createHealthBar(
           isPlayer ? playerFrameTexture : enemyFrameTexture,
           healthFillTexture(ship, healthTextures, config),
         );
-        view = { sprite, healthBar };
+        view = { sprite, fireSprite, healthBar };
         shipViews.set(ship.id, view);
-        entityLayer.addChild(sprite, healthBar.container);
+        entityLayer.addChild(sprite, fireSprite, healthBar.container);
       }
 
       view.sprite.position.set(ship.pos.x, ship.pos.y);
       view.sprite.width = ship.radius * 2;
       view.sprite.height = ship.radius * 2;
       view.sprite.rotation = ship.angle + Math.PI / 2;
-      view.sprite.tint = shipDamageTint(ship, config);
+      const healthRatio = ship.maxHp > 0 ? ship.hp / ship.maxHp : 1;
+      const [firstDamageStage] = config.visual.damageStages;
+      const isDamaged = healthRatio <= firstDamageStage;
+      view.sprite.texture =
+        isDamaged
+          ? damagedTextureByKind[ship.kind]
+          : textureByKind[ship.kind];
+      const fireRotation = ship.angle + Math.PI / 2;
+      const fireOffsetX = ship.radius * 0.35;
+      const fireOffsetY = -ship.radius * 0.2;
+      view.fireSprite.position.set(
+        ship.pos.x +
+          fireOffsetX * Math.cos(fireRotation) -
+          fireOffsetY * Math.sin(fireRotation),
+        ship.pos.y +
+          fireOffsetX * Math.sin(fireRotation) +
+          fireOffsetY * Math.cos(fireRotation),
+      );
+      view.fireSprite.rotation = fireRotation;
+      view.fireSprite.width = ship.radius * 0.75;
+      view.fireSprite.height = ship.radius * 0.8;
+      view.fireSprite.texture =
+        Math.floor(state.elapsedSec * 8) % 2 === 0
+          ? fireTextureOne
+          : fireTextureTwo;
+      view.fireSprite.visible = isDamaged;
       drawHealthBar(view.healthBar, ship, healthTextures, config);
     }
 
@@ -534,6 +619,10 @@ export async function initializePixiRenderer(
     draw,
     destroy(): void {
       application.destroy({ removeView: true }, { children: true });
+      Object.values(damagedTextureByKind).forEach((texture) =>
+        texture.destroy(true),
+      );
+      islandTextures.base.destroy(true);
       shipViews.clear();
     },
   };

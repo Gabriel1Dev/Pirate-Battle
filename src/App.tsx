@@ -6,6 +6,7 @@ import {
   type GameConfig,
   type MatchOptions,
 } from "./game/config";
+import { playUiSound } from "./game/audio/gameAudio";
 import { OptionsScreen } from "./ui/OptionsScreen";
 import "./App.css";
 import { GameScreen } from "./ui/GameScreen";
@@ -44,6 +45,14 @@ function formatMatchDate(value: string): string {
   }).format(new Date(value));
 }
 
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes.toString().padStart(2, "0")}:${remainder
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 function toMatchRecord(match: StoredMatchRecord): MatchRecord {
   return {
     matchId: match.matchId,
@@ -61,16 +70,16 @@ export default function App(): React.JSX.Element {
   const [menuTab, setMenuTab] = useState<MenuTab>("home");
   const [rankingPage, setRankingPage] = useState(1);
   const [historyPage, setHistoryPage] = useState(1);
-  const [networkScenario, setCurrentNetworkScenario] = useState<NetworkScenario>(
-    () => getNetworkScenario(),
+  const [networkScenario, setCurrentNetworkScenario] = useState<NetworkScenario>(() =>
+    getNetworkScenario(),
   );
   const [gameSeed, setGameSeed] = useState(1);
   const [matchId, setMatchId] = useState(() => createMatchId());
-  const [storedOptions, setStoredOptions] = useState<StoredOptionsResult>(
-    () => readStoredOptions(),
+  const [storedOptions, setStoredOptions] = useState<StoredOptionsResult>(() =>
+    readStoredOptions(),
   );
-  const [storedMatches, setStoredMatches] = useState<StoredMatchesResult>(
-    () => readStoredMatches(),
+  const [storedMatches, setStoredMatches] = useState<StoredMatchesResult>(() =>
+    readStoredMatches(),
   );
   const [activeConfig, setActiveConfig] = useState<GameConfig>(() =>
     createMatchConfig(DEFAULT_OPTIONS),
@@ -79,6 +88,77 @@ export default function App(): React.JSX.Element {
   const submitMatchMutation = useSubmitMatch();
   const { mutateAsync: submitMatchAsync } = submitMatchMutation;
   const attemptedMatchIds = useRef(new Set<string>());
+  const retryTimers = useRef(
+    new Map<string, ReturnType<typeof window.setTimeout>>(),
+  );
+  const retryAttempts = useRef(new Map<string, number>());
+  useEffect(() => {
+    let audioUnlocked = false;
+    const handleClick = (event: MouseEvent): void => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      audioUnlocked = true;
+
+      const button = event.target.closest("button");
+      const label = button?.getAttribute("aria-label")?.toLowerCase() ?? "";
+      if (
+        !button ||
+        button.disabled ||
+        label === "pause battle" ||
+        label === "resume battle" ||
+        button.classList.contains("touch-control")
+      ) {
+        return;
+      }
+
+      const text = button.textContent?.trim().toLowerCase() ?? "";
+      if (label.includes("close") || text === "close") {
+        playUiSound("ui_close");
+      } else if (
+        label.includes("main menu") ||
+        text === "main menu" ||
+        text === "back" ||
+        text === "cancel"
+      ) {
+        playUiSound("ui_back");
+      } else if (
+        text === "options" ||
+        text === "ranking" ||
+        text === "match history"
+      ) {
+        playUiSound("ui_open");
+      } else {
+        playUiSound("ui_click");
+      }
+    };
+    const handlePointerOver = (event: PointerEvent): void => {
+      if (!audioUnlocked || !(event.target instanceof Element)) {
+        return;
+      }
+
+      const button = event.target.closest("button");
+      if (
+        !button ||
+        button.disabled ||
+        button.classList.contains("touch-control") ||
+        (event.relatedTarget instanceof Node &&
+          button.contains(event.relatedTarget))
+      ) {
+        return;
+      }
+
+      playUiSound("ui_hover");
+    };
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("pointerover", handlePointerOver);
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("pointerover", handlePointerOver);
+    };
+  }, []);
+
   const pendingMatches = useMemo(
     () => getPendingMatches(storedMatches.matches),
     [storedMatches.matches],
@@ -102,16 +182,43 @@ export default function App(): React.JSX.Element {
 
   const submitPendingMatch = useCallback(
     async (match: MatchRecord): Promise<void> => {
+      if (attemptedMatchIds.current.has(match.matchId)) {
+        return;
+      }
+
+      attemptedMatchIds.current.add(match.matchId);
       try {
         await submitMatchAsync(match);
         const matches = markMatchConfirmed(match.matchId);
+        const retryTimer = retryTimers.current.get(match.matchId);
+        if (retryTimer !== undefined) {
+          window.clearTimeout(retryTimer);
+          retryTimers.current.delete(match.matchId);
+        }
+        retryAttempts.current.delete(match.matchId);
         setStoredMatches({ matches, error: null });
       } catch (error: unknown) {
-        const message =
+        const cause =
           error instanceof Error
             ? error.message
-            : "The match could not be uploaded. It remains saved on this device.";
-        setStoredMatches((current) => ({ ...current, error: message }));
+            : "The match could not be uploaded.";
+        setStoredMatches((current) => ({
+          ...current,
+          error: `${cause} The result is saved on this device and will be retried automatically.`,
+        }));
+
+        if (!retryTimers.current.has(match.matchId)) {
+          const attempts = (retryAttempts.current.get(match.matchId) ?? 0) + 1;
+          retryAttempts.current.set(match.matchId, attempts);
+          const delayMs = Math.min(1000 * 2 ** (attempts - 1), 30_000);
+          const retryTimer = window.setTimeout(() => {
+            retryTimers.current.delete(match.matchId);
+            void submitPendingMatch(match);
+          }, delayMs);
+          retryTimers.current.set(match.matchId, retryTimer);
+        }
+      } finally {
+        attemptedMatchIds.current.delete(match.matchId);
       }
     },
     [submitMatchAsync],
@@ -122,9 +229,29 @@ export default function App(): React.JSX.Element {
       if (attemptedMatchIds.current.has(match.matchId)) {
         continue;
       }
-      attemptedMatchIds.current.add(match.matchId);
       void submitPendingMatch(toMatchRecord(match));
     }
+  }, [pendingMatches, submitPendingMatch]);
+
+  useEffect(() => {
+    const retryPendingMatches = (): void => {
+      for (const match of pendingMatches) {
+        const retryTimer = retryTimers.current.get(match.matchId);
+        if (retryTimer !== undefined) {
+          window.clearTimeout(retryTimer);
+          retryTimers.current.delete(match.matchId);
+        }
+        retryAttempts.current.delete(match.matchId);
+        void submitPendingMatch(toMatchRecord(match));
+      }
+    };
+
+    window.addEventListener("online", retryPendingMatches);
+    window.addEventListener("focus", retryPendingMatches);
+    return () => {
+      window.removeEventListener("online", retryPendingMatches);
+      window.removeEventListener("focus", retryPendingMatches);
+    };
   }, [pendingMatches, submitPendingMatch]);
 
   const startGame = (): void => {
@@ -141,7 +268,12 @@ export default function App(): React.JSX.Element {
   }, []);
 
   const retryPendingMatch = (match: MatchRecord): void => {
-    attemptedMatchIds.current.delete(match.matchId);
+    const retryTimer = retryTimers.current.get(match.matchId);
+    if (retryTimer !== undefined) {
+      window.clearTimeout(retryTimer);
+      retryTimers.current.delete(match.matchId);
+    }
+    retryAttempts.current.delete(match.matchId);
     void submitPendingMatch(match);
   };
 
@@ -156,6 +288,150 @@ export default function App(): React.JSX.Element {
     setCurrentNetworkScenario("success");
     void queryClient.invalidateQueries();
   };
+
+  const rankingContent = rankingQuery.isPending ? (
+    <p className="data-screen-message" role="status">
+      Loading ranking…
+    </p>
+  ) : rankingQuery.isError && !rankingQuery.data ? (
+    <div className="data-screen-message" role="alert">
+      <p>Ranking could not be loaded.</p>
+      <button
+        className="text-action-button"
+        onClick={() => void rankingQuery.refetch()}
+        type="button"
+      >
+        Retry
+      </button>
+    </div>
+  ) : Array.isArray(rankingQuery.data?.items) &&
+    rankingQuery.data.items.length > 0 ? (
+    <>
+      <ol className="data-screen-rows ranking-rows">
+        {rankingQuery.data.items.map((entry, index) => (
+          <li key={entry.matchId}>
+            <span className="data-rank">
+              {((rankingPage - 1) * 5 + index + 1).toString().padStart(2, "0")}
+            </span>
+            <strong className="data-captain">{entry.playerName}</strong>
+            <strong className="data-points">{entry.score}</strong>
+            <time className="data-played" dateTime={entry.completedAt}>
+              {formatMatchDate(entry.completedAt)}
+            </time>
+          </li>
+        ))}
+      </ol>
+      <nav className="data-pagination" aria-label="Ranking pages">
+        <button
+          aria-label="Previous"
+          className="data-page-button"
+          disabled={rankingPage <= 1}
+          onClick={() => setRankingPage((page) => page - 1)}
+          type="button"
+        >
+          <img
+            src="/assets/png/default/ui/controls/icon_turn_left.png"
+            alt=""
+          />
+        </button>
+        <span>
+          Page {rankingQuery.data.page} of{" "}
+          {Math.max(1, rankingQuery.data.totalPages)}
+        </span>
+        <button
+          aria-label="Next"
+          className="data-page-button"
+          disabled={rankingPage >= rankingQuery.data.totalPages}
+          onClick={() => setRankingPage((page) => page + 1)}
+          type="button"
+        >
+          <img
+            src="/assets/png/default/ui/controls/icon_turn_right.png"
+            alt=""
+          />
+        </button>
+      </nav>
+    </>
+  ) : (
+    <p className="data-screen-message">No ranking entries yet.</p>
+  );
+
+  const historyContent = !storedMatches.matches.playerId ? (
+    <p className="data-screen-message">
+      Complete a match to start your history.
+    </p>
+  ) : historyQuery.isPending ? (
+    <p className="data-screen-message" role="status">
+      Loading match history…
+    </p>
+  ) : historyQuery.isError && !historyQuery.data ? (
+    <div className="data-screen-message" role="alert">
+      <p>Match history could not be loaded.</p>
+      <button
+        className="text-action-button"
+        onClick={() => void historyQuery.refetch()}
+        type="button"
+      >
+        Retry
+      </button>
+    </div>
+  ) : Array.isArray(historyQuery.data?.items) &&
+    historyQuery.data.items.length > 0 ? (
+    <>
+      <ol className="data-screen-rows history-rows">
+        {historyQuery.data.items.map((match) => (
+          <li key={match.matchId}>
+            <time className="data-played" dateTime={match.completedAt}>
+              {formatMatchDate(match.completedAt)}
+            </time>
+            <strong className="data-points">{match.score}</strong>
+            <span className="data-duration">
+              {formatDuration(match.durationSec)}
+            </span>
+            <strong
+              className={`data-result ${
+                match.endReason === "time" ? "is-time-up" : "is-defeated"
+              }`}
+            >
+              {match.endReason === "time" ? "TIME UP" : "DEFEATED"}
+            </strong>
+          </li>
+        ))}
+      </ol>
+      <nav className="data-pagination" aria-label="Match history pages">
+        <button
+          aria-label="Previous"
+          className="data-page-button"
+          disabled={historyPage <= 1}
+          onClick={() => setHistoryPage((page) => page - 1)}
+          type="button"
+        >
+          <img
+            src="/assets/png/default/ui/controls/icon_turn_left.png"
+            alt=""
+          />
+        </button>
+        <span>
+          Page {historyQuery.data.page} of{" "}
+          {Math.max(1, historyQuery.data.totalPages)}
+        </span>
+        <button
+          aria-label="Next"
+          className="data-page-button"
+          disabled={historyPage >= historyQuery.data.totalPages}
+          onClick={() => setHistoryPage((page) => page + 1)}
+          type="button"
+        >
+          <img
+            src="/assets/png/default/ui/controls/icon_turn_right.png"
+            alt=""
+          />
+        </button>
+      </nav>
+    </>
+  ) : (
+    <p className="data-screen-message">No completed matches in your history.</p>
+  );
 
   const saveOptions = (options: MatchOptions): void => {
     try {
@@ -208,6 +484,113 @@ export default function App(): React.JSX.Element {
     );
   }
 
+  if (menuTab !== "home") {
+    const isRanking = menuTab === "ranking";
+    const isFetching = isRanking
+      ? rankingQuery.isFetching
+      : historyQuery.isFetching;
+    const hasData = isRanking ? rankingQuery.data : historyQuery.data;
+    const queryError = isRanking ? rankingQuery.isError : historyQuery.isError;
+    const retryQuery = isRanking ? rankingQuery.refetch : historyQuery.refetch;
+
+    return (
+      <main className="menu-screen data-screen">
+        <section
+          className="data-screen-panel"
+          aria-labelledby="captains-log-title"
+          aria-busy={isFetching}
+        >
+          <header className="data-screen-header">
+            <h1 id="captains-log-title">CAPTAIN&apos;S LOG</h1>
+            <nav className="data-screen-tabs" aria-label="Match data">
+              <button
+                aria-pressed={isRanking}
+                className={isRanking ? "is-active" : ""}
+                onClick={() => {
+                  setMenuTab("ranking");
+                  setRankingPage(1);
+                }}
+                type="button"
+              >
+                Ranking
+              </button>
+              <button
+                aria-pressed={!isRanking}
+                className={!isRanking ? "is-active" : ""}
+                onClick={() => {
+                  setMenuTab("history");
+                  setHistoryPage(1);
+                }}
+                type="button"
+              >
+                Match History
+              </button>
+            </nav>
+            <p className="data-screen-subtitle">
+              {isRanking
+                ? `${rankingConfig.match.durationSec} SECOND BATTLES · ${rankingConfig.match.spawnIntervalSec} SECOND SPAWN INTERVAL`
+                : "YOUR RECENT BATTLES"}
+            </p>
+          </header>
+
+          {isFetching && hasData && (
+            <p className="data-screen-status" role="status">
+              Updating {isRanking ? "ranking" : "match history"}…
+            </p>
+          )}
+          {queryError && hasData && (
+            <p className="data-screen-status" role="alert">
+              {isRanking
+                ? "Ranking refresh failed; showing the last available results."
+                : "History refresh failed; showing the last available results."}
+              <button
+                className="text-action-button"
+                onClick={() => void retryQuery()}
+                type="button"
+              >
+                Retry
+              </button>
+            </p>
+          )}
+
+          <div className="data-screen-table">
+            <div
+              className={`data-screen-columns ${
+                isRanking ? "ranking-columns" : "history-columns"
+              }`}
+              aria-hidden="true"
+            >
+              {isRanking ? (
+                <>
+                  <span>RANK</span>
+                  <span>CAPTAIN</span>
+                  <span>POINTS</span>
+                  <span>PLAYED</span>
+                </>
+              ) : (
+                <>
+                  <span>DATE</span>
+                  <span>POINTS</span>
+                  <span>DURATION</span>
+                  <span>RESULT</span>
+                </>
+              )}
+            </div>
+            {isRanking ? rankingContent : historyContent}
+          </div>
+
+          <button
+            className="primary-button menu-button data-screen-home"
+            onClick={() => setMenuTab("home")}
+            type="button"
+          >
+            MAIN MENU
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="menu-screen">
       <section
@@ -242,7 +625,10 @@ export default function App(): React.JSX.Element {
           </p>
         )}
         {pendingMatches.length > 0 && (
-          <div className="pending-match-list" aria-label="Pending match uploads">
+          <div
+            className="pending-match-list"
+            aria-label="Pending match uploads"
+          >
             {pendingMatches.map((match) => (
               <button
                 className="text-action-button"
@@ -271,37 +657,9 @@ export default function App(): React.JSX.Element {
             OPTIONS
           </button>
         </div>
-        <section className="network-scenario" aria-label="Network scenario controls">
-          <label htmlFor="network-scenario">Network demo</label>
-          <select
-            id="network-scenario"
-            onChange={(event) => {
-              const selectedScenario = NETWORK_SCENARIOS.find(
-                (scenario) => scenario === event.currentTarget.value,
-              );
-              if (selectedScenario) {
-                selectNetworkScenario(selectedScenario);
-              }
-            }}
-            value={networkScenario}
-          >
-            {NETWORK_SCENARIOS.map((scenario) => (
-              <option key={scenario} value={scenario}>
-                {scenario}
-              </option>
-            ))}
-          </select>
-          <button
-            className="text-action-button"
-            onClick={resetNetwork}
-            type="button"
-          >
-            Reset mock data
-          </button>
-        </section>
         <nav className="menu-data-tabs" aria-label="Match data">
           <button
-            aria-pressed={menuTab === "ranking"}
+            aria-pressed={false}
             onClick={() => {
               setMenuTab("ranking");
               setRankingPage(1);
@@ -311,7 +669,7 @@ export default function App(): React.JSX.Element {
             Ranking
           </button>
           <button
-            aria-pressed={menuTab === "history"}
+            aria-pressed={false}
             onClick={() => {
               setMenuTab("history");
               setHistoryPage(1);
@@ -321,162 +679,37 @@ export default function App(): React.JSX.Element {
             Match History
           </button>
         </nav>
-        {menuTab !== "home" && (
-          <section
-            className="menu-data-panel"
-            aria-label={menuTab === "ranking" ? "Ranking" : "Match history"}
-            aria-live="polite"
-            aria-busy={
-              menuTab === "ranking"
-                ? rankingQuery.isFetching
-                : historyQuery.isFetching
-            }
-          >
-            <h2>{menuTab === "ranking" ? "Ranking" : "Match History"}</h2>
-            {menuTab === "ranking" &&
-              rankingQuery.isFetching &&
-              rankingQuery.data && <p role="status">Updating ranking…</p>}
-            {menuTab === "ranking" &&
-              rankingQuery.isError &&
-              rankingQuery.data && (
-                <p role="alert">
-                  Ranking refresh failed; showing the last available results.
-                  <button
-                    className="text-action-button"
-                    onClick={() => void rankingQuery.refetch()}
-                    type="button"
-                  >
-                    Retry
-                  </button>
-                </p>
-              )}
-            {menuTab === "history" &&
-              historyQuery.isFetching &&
-              historyQuery.data && <p role="status">Updating match history…</p>}
-            {menuTab === "history" &&
-              historyQuery.isError &&
-              historyQuery.data && (
-                <p role="alert">
-                  History refresh failed; showing the last available results.
-                  <button
-                    className="text-action-button"
-                    onClick={() => void historyQuery.refetch()}
-                    type="button"
-                  >
-                    Retry
-                  </button>
-                </p>
-              )}
-            {menuTab === "ranking" && (
-              rankingQuery.isPending ? (
-                <p role="status">Loading ranking…</p>
-              ) : rankingQuery.isError && !rankingQuery.data ? (
-                <div role="alert">
-                  <p>Ranking could not be loaded.</p>
-                  <button
-                    className="text-action-button"
-                    onClick={() => void rankingQuery.refetch()}
-                    type="button"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : Array.isArray(rankingQuery.data?.items) &&
-                rankingQuery.data.items.length > 0 ? (
-                <>
-                  <ol className="data-list">
-                    {rankingQuery.data.items.map((entry, index) => (
-                      <li key={entry.matchId}>
-                        <span>#{(rankingPage - 1) * 5 + index + 1} {entry.playerName}</span>
-                        <strong>{entry.score}</strong>
-                        <small>{formatMatchDate(entry.completedAt)}</small>
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="pagination-controls">
-                    <button
-                      disabled={rankingPage <= 1}
-                      onClick={() => setRankingPage((page) => page - 1)}
-                      type="button"
-                    >
-                      Previous
-                    </button>
-                    <span>
-                      Page {rankingQuery.data.page} of{" "}
-                      {Math.max(1, rankingQuery.data.totalPages)}
-                    </span>
-                    <button
-                      disabled={rankingPage >= rankingQuery.data.totalPages}
-                      onClick={() => setRankingPage((page) => page + 1)}
-                      type="button"
-                    >
-                      Next
-                    </button>
-                  </p>
-                </>
-              ) : (
-                <p>No ranking entries yet.</p>
-              )
-            )}
-            {menuTab === "history" && (
-              !storedMatches.matches.playerId ? (
-                <p>Complete a match to start your history.</p>
-              ) : historyQuery.isPending ? (
-                <p role="status">Loading match history…</p>
-              ) : historyQuery.isError && !historyQuery.data ? (
-                <div role="alert">
-                  <p>Match history could not be loaded.</p>
-                  <button
-                    className="text-action-button"
-                    onClick={() => void historyQuery.refetch()}
-                    type="button"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : Array.isArray(historyQuery.data?.items) &&
-                historyQuery.data.items.length > 0 ? (
-                <>
-                  <ol className="data-list">
-                    {historyQuery.data.items.map((match) => (
-                      <li key={match.matchId}>
-                        <span>
-                          {match.score} points · {Math.floor(match.durationSec)}s
-                        </span>
-                        <strong>
-                          {match.endReason === "time" ? "Time" : "Defeat"}
-                        </strong>
-                        <small>{formatMatchDate(match.completedAt)}</small>
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="pagination-controls">
-                    <button
-                      disabled={historyPage <= 1}
-                      onClick={() => setHistoryPage((page) => page - 1)}
-                      type="button"
-                    >
-                      Previous
-                    </button>
-                    <span>
-                      Page {historyQuery.data.page} of{" "}
-                      {Math.max(1, historyQuery.data.totalPages)}
-                    </span>
-                    <button
-                      disabled={historyPage >= historyQuery.data.totalPages}
-                      onClick={() => setHistoryPage((page) => page + 1)}
-                      type="button"
-                    >
-                      Next
-                    </button>
-                  </p>
-                </>
-              ) : (
-                <p>No completed matches in your history.</p>
-              )
-            )}
-          </section>
-        )}
+        <details className="network-demo-controls">
+          <summary>Network demo: {networkScenario}</summary>
+          <div className="network-demo-actions">
+            <label htmlFor="network-scenario">Scenario</label>
+            <select
+              id="network-scenario"
+              onChange={(event) => {
+                const selectedScenario = NETWORK_SCENARIOS.find(
+                  (scenario) => scenario === event.currentTarget.value,
+                );
+                if (selectedScenario) {
+                  selectNetworkScenario(selectedScenario);
+                }
+              }}
+              value={networkScenario}
+            >
+              {NETWORK_SCENARIOS.map((scenario) => (
+                <option key={scenario} value={scenario}>
+                  {scenario}
+                </option>
+              ))}
+            </select>
+            <button
+              className="text-action-button"
+              onClick={resetNetwork}
+              type="button"
+            >
+              Reset mock data
+            </button>
+          </div>
+        </details>
         <img
           className="menu-ship-decoration"
           src="/assets/png/default/ships/ship_1.png"
@@ -485,30 +718,6 @@ export default function App(): React.JSX.Element {
         <p className="menu-description">
           Navigate the islands. Survive the battle.
         </p>
-        <div className="controls" aria-label="Keyboard controls">
-          <div className="control">
-            <span className="key">W</span>
-            <span className="key">↑</span>
-            <span>Move</span>
-          </div>
-
-          <div className="control">
-            <span className="key">A</span>
-            <span className="key">D</span>
-            <span>Turn</span>
-          </div>
-
-          <div className="control">
-            <span className="key wide">SPACE</span>
-            <span>Fire</span>
-          </div>
-
-          <div className="control">
-            <span className="key">Q</span>
-            <span className="key">E</span>
-            <span>Broadside</span>
-          </div>
-        </div>
       </section>
     </main>
   );
