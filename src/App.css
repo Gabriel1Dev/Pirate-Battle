@@ -175,7 +175,6 @@
 }
 
 .text-action-button,
-.menu-data-tabs button,
 .pagination-controls button {
   border: 1px solid #8e815f;
   border-radius: 4px;
@@ -202,47 +201,54 @@
 .menu-data-tabs {
   display: flex;
   justify-content: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .menu-data-tabs button {
+  display: grid;
   width: min(148px, calc((100vw - 100px) / 2));
-  min-height: 44px;
-  aspect-ratio: 2.72;
+  min-width: min(38vw, 150px);
+  min-height: 48px;
+  place-items: center;
   border: 0;
   border-radius: 0;
-  padding: 6px 18px;
+  padding: 8px 16px;
   background-color: transparent;
-  background-image: url("/assets/png/default/ui/menu/button_primary_normal.png");
+  background-image: url("/assets/png/default/ui/menu/button_secondary_normal.png");
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
-  color: #fff1d2;
-  font-size: 0.8rem;
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.menu-data-tabs button:hover {
-  background-color: transparent;
-  background-image: url("/assets/png/default/ui/menu/button_primary_normal.png");
-  filter: brightness(1.12);
-  transform: none;
-}
-
-.menu-data-tabs button:active {
-  background-color: transparent;
-  background-image: url("/assets/png/default/ui/menu/button_primary_pressed.png");
-}
-
-.menu-data-tabs button[aria-pressed="true"] {
-  background-image: url("/assets/png/default/ui/menu/button_secondary_normal.png");
   color: #f2dfb0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.menu-data-tabs button[aria-pressed="true"]:hover {
-  filter: brightness(1.12);
+.home-card .menu-button {
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.menu-data-tabs button:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+
+.menu-data-tabs button:active:not(:disabled),
+.menu-data-tabs button[aria-pressed="true"] {
+  background-image: url("/assets/png/default/ui/menu/button_secondary_pressed.png");
+}
+
+.menu-data-tabs button:active:not(:disabled) {
+  filter: none;
+  transform: translateY(1px);
+}
+
+.menu-data-tabs button:focus-visible {
+  outline: 2px solid #f0d792;
+  outline-offset: 3px;
 }
 
 .menu-data-panel {
@@ -341,10 +347,16 @@
   background-image: url("/assets/png/default/ui/menu/button_secondary_normal.png");
 }
 
-.menu-button.secondary-button:hover,
-.menu-button.secondary-button:active {
+.home-card .menu-button.secondary-button:hover {
+  background-color: transparent;
+  filter: brightness(1.2);
+}
+
+.home-card .menu-button.secondary-button:active {
   background-color: transparent;
   background-image: url("/assets/png/default/ui/menu/button_secondary_pressed.png");
+  filter: none;
+  transform: translateY(1px);
 }
 
 .options-card {

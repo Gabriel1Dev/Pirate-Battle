@@ -48,6 +48,13 @@ declare global {
   interface Window {
     __game?: {
       getState(): BrowserGameState | null;
+      getCameraTransform(): {
+        readonly x: number;
+        readonly y: number;
+        readonly scale: number;
+      } | null;
+      getCreatedDestructionFragmentCount(): number;
+      getRenderedShipIds(): readonly number[];
       getWreckCount(): number;
       setInput(input: {
         forward?: boolean;
@@ -378,6 +385,45 @@ test("deals combat damage and awards exactly one point per destroyed enemy", asy
   expect(result.score).toBe(result.destroyed);
 });
 
+test("fires broadside projectiles in sequence instead of simultaneously", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "PLAY" }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.waitForFunction(() => window.__game?.getState() !== null);
+
+  const shotTimes = await page.evaluate(() => {
+    const hook = window.__game;
+    if (!hook) {
+      throw new Error("The deterministic game test hook is unavailable.");
+    }
+
+    hook.reset(29);
+    hook.setInput({ fireLeft: true });
+    const times: number[] = [];
+    let previousShotCount = 0;
+    for (let elapsed = 0; elapsed < 0.25; elapsed += 0.025) {
+      hook.advanceBy(0.025);
+      const state = hook.getState();
+      if (!state) {
+        throw new Error("The deterministic game state was lost.");
+      }
+      if (state.stats.shotsFired > previousShotCount) {
+        times.push(state.elapsedSec);
+        previousShotCount = state.stats.shotsFired;
+      }
+    }
+    hook.setInput({});
+    return times;
+  });
+
+  expect(shotTimes).toHaveLength(3);
+  expect(shotTimes[1] - shotTimes[0]).toBeGreaterThanOrEqual(0.05);
+  expect(shotTimes[2] - shotTimes[1]).toBeGreaterThanOrEqual(0.05);
+  expect(shotTimes[1] - shotTimes[0]).toBeLessThan(0.12);
+  expect(shotTimes[2] - shotTimes[1]).toBeLessThan(0.12);
+});
+
 test("stops the player at island and arena boundaries", async ({ page }) => {
   await page.getByRole("button", { name: "PLAY" }).click();
   await expect(page.locator("canvas")).toBeVisible();
@@ -532,6 +578,14 @@ test("ends and saves the match when the player is destroyed", async ({
   expect(endedState?.status).toBe("ended");
   expect(endedState?.endReason).toBe("death");
   expect(endedState?.player.hp).toBe(0);
+  expect(
+    await page.evaluate(
+      () => window.__game?.getCreatedDestructionFragmentCount() ?? 0,
+    ),
+  ).toBeGreaterThanOrEqual(7);
+  expect(
+    await page.evaluate(() => window.__game?.getRenderedShipIds()),
+  ).not.toContain(1);
   expect(await page.evaluate(() => window.__game?.getWreckCount())).toBe(1);
   expect(endedState?.elapsedSec).toBeLessThan(
     endedState?.config.match.durationSec ?? 0,
@@ -683,6 +737,45 @@ test("drives movement and firing with mobile touch controls", async ({
   expect(state?.stats.shotsFired).toBeGreaterThan(0);
 });
 
+test("follows the player with the camera in the mobile viewport", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The following camera is specific to narrow viewports.");
+  await page.getByRole("button", { name: "PLAY" }).click();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.waitForFunction(
+    () => window.__game?.getCameraTransform() !== null,
+  );
+
+  const initialCamera = await page.evaluate(
+    () => window.__game?.getCameraTransform() ?? null,
+  );
+  await page.evaluate(() => {
+    window.__game?.setInput({ forward: true });
+    window.__game?.advanceBy(1);
+    window.__game?.setInput({});
+  });
+
+  const result = await page.evaluate(() => {
+    const camera = window.__game?.getCameraTransform();
+    const player = window.__game?.getState()?.player;
+    const canvas = document.querySelector("canvas");
+    if (!camera || !player || !canvas) {
+      throw new Error("The mobile camera state is unavailable.");
+    }
+
+    return {
+      camera,
+      playerScreenX: camera.x + player.pos.x * camera.scale,
+      canvasWidth: canvas.getBoundingClientRect().width,
+    };
+  });
+
+  expect(result.camera.x).toBeLessThan(initialCamera?.x ?? 0);
+  expect(result.playerScreenX).toBeCloseTo(result.canvasWidth / 2, 0);
+});
+
 test("keeps failed match uploads pending and retries them without duplicates", async ({
   page,
 }) => {
@@ -790,14 +883,51 @@ test("shows paginated ranking and selectable empty and failure scenarios", async
   await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
 });
 
-test("hides network demo controls while keeping mock scenarios URL-selectable", async ({
+test("keeps network demo controls out of the main menu", async ({
   page,
 }) => {
-  await expect(page.getByText(/Network demo:/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "PLAY" })).toBeVisible();
+  await expect(page.getByText(/Network demo/i)).toHaveCount(0);
   await expect(page.getByLabel("Scenario")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Reset mock data" })).toHaveCount(
     0,
   );
+  const buttonBackgrounds = await page
+    .locator(".home-card .menu-button, .home-card .menu-data-tabs button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => getComputedStyle(button).backgroundImage),
+    );
+  expect(buttonBackgrounds).toEqual([
+    expect.stringContaining("button_primary_normal.png"),
+    expect.stringContaining("button_secondary_normal.png"),
+    expect.stringContaining("button_secondary_normal.png"),
+    expect.stringContaining("button_secondary_normal.png"),
+  ]);
+
+  await page.getByRole("button", { name: "PLAY" }).hover();
+  await expect
+    .poll(() =>
+      page
+        .getByRole("button", { name: "PLAY" })
+        .evaluate((button) => getComputedStyle(button).backgroundImage),
+    )
+    .toContain("button_primary_hover.png");
+
+  for (const name of ["OPTIONS", "Ranking", "Match History"]) {
+    const button = page.getByRole("button", { name });
+    await button.hover();
+    await expect
+      .poll(() =>
+        button.evaluate((element) => ({
+          image: getComputedStyle(element).backgroundImage,
+          filter: getComputedStyle(element).filter,
+        })),
+      )
+      .toEqual({
+        image: expect.stringContaining("button_secondary_normal.png"),
+        filter: "brightness(1.2)",
+      });
+  }
 
   await page.goto("/?scenario=empty");
   await page.getByRole("button", { name: "Ranking" }).click();
